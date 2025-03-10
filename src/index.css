@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-solana-dark text-white min-h-screen;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-solana-green text-black px-4 py-2 rounded-lg hover:opacity-90 transition-opacity;
+  }
+
+  .btn-secondary {
+    @apply bg-solana-purple text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity;
+  }
+
+  .input-primary {
+    @apply bg-solana-gray text-white px-4 py-2 rounded-lg border border-gray-600 focus:outline-none focus:border-solana-green;
+  }
+
+  .card {
+    @apply bg-solana-gray p-6 rounded-xl border border-gray-700;
+  }
+}

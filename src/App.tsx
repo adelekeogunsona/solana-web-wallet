@@ -1,0 +1,108 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './hooks/useAuth';
+import MainLayout from './layouts/MainLayout';
+import Home from './pages/Home';
+import Settings from './pages/Settings';
+import Login from './pages/Login';
+import Setup from './pages/Setup';
+import Transfer from './pages/Transfer';
+import WalletSetup from './pages/WalletSetup';
+import ImportWallet from './pages/ImportWallet';
+
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isInitialized } = useAuth();
+
+  if (!isInitialized) {
+    return <Navigate to="/setup" />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
+  return <>{children}</>;
+}
+
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isInitialized } = useAuth();
+
+  if (!isInitialized) {
+    return <Navigate to="/setup" />;
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/" />;
+  }
+
+  return <>{children}</>;
+}
+
+function SetupRoute({ children }: { children: React.ReactNode }) {
+  const { isInitialized } = useAuth();
+
+  if (isInitialized) {
+    return <Navigate to="/" />;
+  }
+
+  return <>{children}</>;
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route
+            path="/setup"
+            element={
+              <SetupRoute>
+                <WalletSetup />
+              </SetupRoute>
+            }
+          />
+          <Route
+            path="/setup/create"
+            element={
+              <SetupRoute>
+                <Setup />
+              </SetupRoute>
+            }
+          />
+          <Route
+            path="/setup/import"
+            element={
+              <SetupRoute>
+                <ImportWallet />
+              </SetupRoute>
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/"
+            element={
+              <PrivateRoute>
+                <MainLayout>
+                  <Routes>
+                    <Route index element={<Home />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/transfer" element={<Transfer />} />
+                  </Routes>
+                </MainLayout>
+              </PrivateRoute>
+            }
+          />
+        </Routes>
+      </Router>
+    </AuthProvider>
+  );
+}
+
+export default App;
