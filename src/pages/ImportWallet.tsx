@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 type ImportMethod = 'seed' | 'private-key';
 
 export default function ImportWallet() {
-  const [importMethod, setImportMethod] = useState<ImportMethod>('seed');
+  const [method, setMethod] = useState<ImportMethod>('seed');
   const [seedPhrase, setSeedPhrase] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [password, setPassword] = useState('');
@@ -21,21 +21,13 @@ export default function ImportWallet() {
     setIsLoading(true);
 
     try {
-      if (importMethod === 'seed') {
-        await importWallet({
-          type: 'seed',
-          seedPhrase,
-          password,
-          confirmPassword,
-        });
-      } else {
-        await importWallet({
-          type: 'private-key',
-          privateKey,
-          password,
-          confirmPassword,
-        });
-      }
+      await importWallet({
+        type: method,
+        seedPhrase: method === 'seed' ? seedPhrase : undefined,
+        privateKey: method === 'private-key' ? privateKey : undefined,
+        password,
+        confirmPassword,
+      });
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to import wallet');
@@ -56,46 +48,49 @@ export default function ImportWallet() {
 
         <div className="card">
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="flex space-x-4 mb-6">
-              <button
-                type="button"
-                className={`flex-1 py-2 px-4 rounded-lg ${
-                  importMethod === 'seed'
-                    ? 'bg-solana-green text-white'
-                    : 'bg-gray-700 text-gray-300'
-                }`}
-                onClick={() => setImportMethod('seed')}
-              >
-                Seed Phrase
-              </button>
-              <button
-                type="button"
-                className={`flex-1 py-2 px-4 rounded-lg ${
-                  importMethod === 'private-key'
-                    ? 'bg-solana-green text-white'
-                    : 'bg-gray-700 text-gray-300'
-                }`}
-                onClick={() => setImportMethod('private-key')}
-              >
-                Private Key
-              </button>
+            <div>
+              <label className="block text-sm font-medium mb-2">Import Method</label>
+              <div className="flex space-x-4">
+                <button
+                  type="button"
+                  className={`flex-1 py-2 px-4 rounded-lg ${
+                    method === 'seed'
+                      ? 'bg-solana-green text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                  onClick={() => setMethod('seed')}
+                >
+                  Seed Phrase
+                </button>
+                <button
+                  type="button"
+                  className={`flex-1 py-2 px-4 rounded-lg ${
+                    method === 'private-key'
+                      ? 'bg-solana-green text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                  onClick={() => setMethod('private-key')}
+                >
+                  Private Key
+                </button>
+              </div>
             </div>
 
-            {importMethod === 'seed' ? (
+            {method === 'seed' ? (
               <div>
                 <label htmlFor="seedPhrase" className="block text-sm font-medium mb-2">
-                  Recovery Phrase
+                  Seed Phrase
                 </label>
                 <textarea
                   id="seedPhrase"
                   value={seedPhrase}
                   onChange={(e) => setSeedPhrase(e.target.value)}
                   className="input-primary w-full h-32"
-                  placeholder="Enter your 12 or 24-word recovery phrase"
+                  placeholder="Enter your 12 or 24 word seed phrase"
                   required
                 />
                 <p className="mt-2 text-sm text-gray-400">
-                  Enter your recovery phrase, with each word separated by a space
+                  Enter your seed phrase with words separated by spaces
                 </p>
               </div>
             ) : (
@@ -148,7 +143,7 @@ export default function ImportWallet() {
             </div>
 
             {error && (
-              <p className="mt-2 text-sm text-red-500">{error}</p>
+              <p className="text-sm text-red-500">{error}</p>
             )}
 
             <button

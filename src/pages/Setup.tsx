@@ -1,9 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-
-// Dummy recovery phrase
-const DUMMY_RECOVERY_PHRASE = 'abandon ability able about above absent absorb abstract absurd abuse access accident';
 
 export default function Setup() {
   const [step, setStep] = useState(1);
@@ -12,8 +9,22 @@ export default function Setup() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [hasConfirmedPhrase, setHasConfirmedPhrase] = useState(false);
+  const [recoveryPhrase, setRecoveryPhrase] = useState('');
   const { initializeWallet } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // When moving to step 2, get the recovery phrase from localStorage
+    if (step === 2) {
+      const walletData = localStorage.getItem('temp_wallet_data');
+      if (walletData) {
+        const { mnemonic } = JSON.parse(walletData);
+        setRecoveryPhrase(mnemonic);
+        // Clear the temporary data
+        localStorage.removeItem('temp_wallet_data');
+      }
+    }
+  }, [step]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +73,9 @@ export default function Setup() {
                   required
                   minLength={8}
                 />
+                <p className="mt-2 text-sm text-gray-400">
+                  Password must be at least 8 characters long
+                </p>
               </div>
 
               <div>
@@ -78,10 +92,11 @@ export default function Setup() {
                   required
                   minLength={8}
                 />
-                {error && (
-                  <p className="mt-2 text-sm text-red-500">{error}</p>
-                )}
               </div>
+
+              {error && (
+                <p className="text-sm text-red-500">{error}</p>
+              )}
 
               <button
                 type="submit"
@@ -99,11 +114,15 @@ export default function Setup() {
                 </label>
                 <div className="bg-solana-dark p-4 rounded-lg">
                   <p className="text-sm font-mono break-all">
-                    {DUMMY_RECOVERY_PHRASE}
+                    {recoveryPhrase}
                   </p>
                 </div>
                 <p className="mt-2 text-sm text-red-500">
                   Warning: Never share your recovery phrase with anyone!
+                </p>
+                <p className="mt-2 text-sm text-gray-400">
+                  Write down these words in the correct order and store them in a secure location.
+                  You will need them to recover your wallet if you lose access.
                 </p>
               </div>
 
