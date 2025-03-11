@@ -1,7 +1,13 @@
 import { createContext } from 'react';
 
+export interface WalletData {
+  mnemonic?: string;
+  privateKey: string;
+  publicKey: string;
+}
+
 export interface ImportWalletParams {
-  type: 'seed' | 'private-key';
+  type: 'seed' | 'private';
   seedPhrase?: string;
   privateKey?: string;
   password: string;
@@ -11,6 +17,7 @@ export interface ImportWalletParams {
 export interface AuthContextType {
   isAuthenticated: boolean;
   isInitialized: boolean;
+  currentWallet: WalletData | null;
   login: (password: string) => Promise<void>;
   logout: () => void;
   initializeWallet: (password: string, confirmPassword: string) => Promise<void>;
@@ -18,4 +25,13 @@ export interface AuthContextType {
   resetWallet: () => void;
 }
 
-export const AuthContext = createContext<AuthContextType | null>(null);
+export const AuthContext = createContext<AuthContextType>({
+  isAuthenticated: false,
+  isInitialized: false,
+  currentWallet: null,
+  login: async () => {},
+  logout: () => {},
+  initializeWallet: async () => {},
+  importWallet: async () => {},
+  resetWallet: () => {},
+});

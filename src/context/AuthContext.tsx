@@ -1,5 +1,5 @@
 import { useState, ReactNode } from 'react';
-import { AuthContext, ImportWalletParams } from './authContextTypes';
+import { AuthContext, ImportWalletParams, WalletData } from './authContextTypes';
 import {
   generateNewWallet,
   getKeypairFromMnemonic,
@@ -11,12 +11,6 @@ import {
   uint8ArrayToHex
 } from '../utils/wallet';
 import { Keypair } from '@solana/web3.js';
-
-interface WalletData {
-  mnemonic?: string;
-  privateKey: string;
-  publicKey: string;
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -141,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       isAuthenticated,
       isInitialized,
+      currentWallet,
       login,
       logout,
       initializeWallet,
