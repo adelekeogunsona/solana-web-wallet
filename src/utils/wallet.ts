@@ -2,6 +2,7 @@ import { Buffer } from 'buffer';
 import { Keypair } from '@solana/web3.js';
 import { mnemonicToSeedSync, generateMnemonic } from 'bip39';
 import { derivePath } from 'ed25519-hd-key';
+import bs58 from 'bs58';
 
 // Polyfill Buffer
 if (typeof window !== 'undefined') {
@@ -9,12 +10,17 @@ if (typeof window !== 'undefined') {
 }
 
 // Constants
+// BIP44 derivation path for Solana (44'/501'/0'/0')
+// https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
+// Coin type 501 = Solana
 const DERIVATION_PATH = "m/44'/501'/0'/0'";
 
 // Helper function to convert hex string to Uint8Array
 function hexToUint8Array(hexString: string): Uint8Array {
+  // Remove any non-hex characters (like spaces or 0x prefix)
+  const cleanHex = hexString.replace(/[^a-fA-F0-9]/g, '');
   return new Uint8Array(
-    hexString.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []
+    cleanHex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []
   );
 }
 
@@ -27,25 +33,62 @@ export function uint8ArrayToHex(arr: Uint8Array): string {
 
 // Generate a new mnemonic phrase and keypair
 export function generateNewWallet(): { mnemonic: string; keypair: Keypair } {
-  const mnemonic = generateMnemonic(256); // 24 words
+  // Generate a 12-word mnemonic (128 bits of entropy)
+  // This is the standard for Solana wallets
+  const mnemonic = generateMnemonic(128);
   const keypair = getKeypairFromMnemonic(mnemonic);
   return { mnemonic, keypair };
 }
 
 // Import wallet from mnemonic phrase
 export function getKeypairFromMnemonic(mnemonic: string): Keypair {
-  const seed = mnemonicToSeedSync(mnemonic);
-  const derivedSeed = derivePath(DERIVATION_PATH, seed.toString('hex')).key;
-  return Keypair.fromSeed(derivedSeed);
+  try {
+    // Validate mnemonic
+    const words = mnemonic.trim().split(/\s+/g);
+    if (words.length !== 12 && words.length !== 24) {
+      throw new Error('Mnemonic must be 12 or 24 words');
+    }
+
+    // Generate seed from mnemonic
+    const seed = mnemonicToSeedSync(mnemonic);
+
+    // Derive the Ed25519 private key using the correct path for Solana
+    const derivedSeed = derivePath(DERIVATION_PATH, seed.toString('hex')).key;
+
+    // Create a Keypair from the derived seed
+    return Keypair.fromSeed(derivedSeed.slice(0, 32));
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error('Invalid mnemonic: ' + error.message);
+    }
+    throw new Error('Invalid mnemonic');
+  }
 }
 
 // Import wallet from private key
 export function getKeypairFromPrivateKey(privateKeyString: string): Keypair {
   try {
-    const privateKeyBytes = hexToUint8Array(privateKeyString);
-    return Keypair.fromSecretKey(privateKeyBytes);
+    let secretKey: Uint8Array;
+
+    // Try to decode as base58 first (most common Solana format)
+    try {
+      secretKey = bs58.decode(privateKeyString);
+    } catch {
+      // If not base58, try as hex
+      secretKey = hexToUint8Array(privateKeyString);
+    }
+
+    // Validate the key length
+    if (secretKey.length !== 64) {
+      throw new Error('Private key must be 64 bytes');
+    }
+
+    return Keypair.fromSecretKey(secretKey);
   } catch (error) {
-    throw new Error('Invalid private key format: ' + error);
+    if (error instanceof Error) {
+      throw new Error('Invalid private key format: ' + error.message);
+    }
+    throw new Error('Invalid private key format');
   }
 }
 
