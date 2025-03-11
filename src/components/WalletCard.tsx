@@ -1,7 +1,7 @@
 interface WalletCardProps {
   name: string;
   address: string;
-  balance: number;
+  balance?: number;
   selected?: boolean;
   onClick?: () => void;
 }
@@ -22,7 +22,10 @@ export default function WalletCard({ name, address, balance, selected, onClick }
           </p>
         </div>
         <div className="text-right">
-          <p className="text-xl font-bold text-solana-green">{balance} SOL</p>
+          <p className="text-sm text-gray-400">Balance</p>
+          <p className="text-lg font-medium text-white">
+            {balance !== undefined ? `${balance.toFixed(4)} SOL` : 'Loading...'}
+          </p>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { AuthContext } from '../context/authContextTypes';
 import WalletCard from '../components/WalletCard';
 import TokenCard from '../components/TokenCard';
 import TransactionList from '../components/TransactionList';
+import { rpcManager } from '../utils/rpc';
 
 const DUMMY_TOKENS = [
   { id: 1, name: 'Serum', symbol: 'SRM', balance: 1000 },
@@ -62,6 +63,7 @@ const SeedPhrasePopup = ({ seedPhrase, onClose }: SeedPhrasePopupProps) => {
 export default function Home() {
   const { currentWallet } = useContext(AuthContext);
   const [seedPhrase, setSeedPhrase] = useState<string | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
 
   useEffect(() => {
     const tempWalletData = localStorage.getItem('temp_wallet_data');
@@ -74,6 +76,28 @@ export default function Home() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (currentWallet?.publicKey) {
+        try {
+          const solBalance = await rpcManager.getBalance(currentWallet.publicKey);
+          setBalance(solBalance);
+        } catch (error) {
+          console.error('Error fetching balance:', error);
+          setBalance(null);
+        }
+      } else {
+        setBalance(null);
+      }
+    };
+
+    fetchBalance();
+    // Set up an interval to refresh the balance every 30 seconds
+    const intervalId = setInterval(fetchBalance, 30000);
+
+    return () => clearInterval(intervalId);
+  }, [currentWallet?.publicKey]);
 
   const handleCloseSeedPhrase = () => {
     localStorage.removeItem('temp_wallet_data');
@@ -105,7 +129,7 @@ export default function Home() {
           <WalletCard
             name="Main Wallet"
             address={currentWallet?.publicKey || 'No wallet connected'}
-            balance={12.345}
+            balance={balance !== null ? balance : undefined}
           />
         </div>
       </div>
