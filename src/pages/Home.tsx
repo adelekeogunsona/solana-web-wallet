@@ -6,6 +6,8 @@ import TokenCard from '../components/TokenCard';
 import WalletGrid from '../components/WalletGrid';
 import { rpcManager } from '../utils/rpc';
 import PinInput from '../components/PinInput';
+import { hexToUint8Array } from '../utils/wallet';
+import bs58 from 'bs58';
 
 const DUMMY_TOKENS = [
   { id: 1, name: 'Serum', symbol: 'SRM', balance: 1000 },
@@ -91,10 +93,23 @@ const BackupPopup = ({ seedPhrase, onClose, isPrivateKey = false }: BackupPopupP
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(seedPhrase);
+      // If it's a private key, convert from hex to base58 before copying
+      const textToCopy = isPrivateKey ? bs58.encode(hexToUint8Array(seedPhrase)) : seedPhrase;
+      await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
     } catch (err) {
       console.error('Failed to copy:', err);
+    }
+  };
+
+  const formatPrivateKey = (hexKey: string): string => {
+    if (!isPrivateKey) return hexKey;
+    try {
+      // Convert hex private key to base58
+      return bs58.encode(hexToUint8Array(hexKey));
+    } catch (err) {
+      console.error('Failed to format private key:', err);
+      return hexKey;
     }
   };
 
@@ -137,7 +152,7 @@ const BackupPopup = ({ seedPhrase, onClose, isPrivateKey = false }: BackupPopupP
             Store it in a safe place.
           </p>
           <div className="bg-gray-800 p-4 rounded-lg mb-4 border border-gray-700">
-            <p className="font-mono break-all text-gray-100">{seedPhrase}</p>
+            <p className="font-mono break-all text-gray-100">{formatPrivateKey(seedPhrase)}</p>
           </div>
           <div className="flex justify-between items-center">
             <button

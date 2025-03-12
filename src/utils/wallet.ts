@@ -16,7 +16,7 @@ if (typeof window !== 'undefined') {
 const DERIVATION_PATH = "m/44'/501'/0'/0'";
 
 // Helper function to convert hex string to Uint8Array
-function hexToUint8Array(hexString: string): Uint8Array {
+export function hexToUint8Array(hexString: string): Uint8Array {
   // Remove any non-hex characters (like spaces or 0x prefix)
   const cleanHex = hexString.replace(/[^a-fA-F0-9]/g, '');
   return new Uint8Array(
