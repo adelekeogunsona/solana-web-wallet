@@ -1,5 +1,7 @@
-import { useState, ReactNode, useEffect } from 'react';
+import { useState, ReactNode, useEffect, useContext } from 'react';
 import { AuthContext, ImportWalletParams, WalletData } from './authContextTypes';
+import { SettingsContext } from './settingsContext';
+import { defaultSettings } from './settingsTypes';
 import {
   generateNewWallet,
   getKeypairFromMnemonic,
@@ -13,8 +15,6 @@ import {
 import { Keypair } from '@solana/web3.js';
 import { v4 as uuidv4 } from 'uuid';
 
-const SESSION_TIMEOUT = 10 * 60 * 1000; // 10 minutes in milliseconds
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isInitialized, setIsInitialized] = useState(
@@ -23,6 +23,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentWallet, setCurrentWallet] = useState<WalletData | null>(null);
   const [wallets, setWallets] = useState<WalletData[]>([]);
   const [currentPin, setCurrentPin] = useState<string>('');
+  const settingsContext = useContext(SettingsContext);
+  const settings = settingsContext?.settings || defaultSettings;
 
   // Check session validity on component mount and after any authentication state change
   useEffect(() => {
@@ -35,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const now = Date.now();
         const lastActivity = parseInt(sessionTimestamp, 10);
 
-        if (now - lastActivity < SESSION_TIMEOUT) {
+        if (now - lastActivity < settings.autoLogoutDuration) {
           // Session is still valid
           const walletsData: WalletData[] = JSON.parse(encryptedWallets);
           setWallets(walletsData);
@@ -60,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const intervalId = setInterval(checkSession, 60000);
 
     return () => clearInterval(intervalId);
-  }, [currentWallet]);
+  }, [currentWallet, settings.autoLogoutDuration]);
 
   const handleSessionExpiry = () => {
     localStorage.removeItem('session_timestamp');
@@ -318,6 +320,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const changePin = async (currentPin: string, newPin: string) => {
+    try {
+      // Verify current PIN
+      const encryptedData = getStoredWalletData();
+      if (!encryptedData) {
+        throw new Error('No wallet data found');
+      }
+
+      // Try to decrypt with current PIN
+      const decryptedData = await decryptWalletData(encryptedData, currentPin);
+
+      // Re-encrypt with new PIN
+      const newEncryptedData = await encryptWalletData(decryptedData, newPin);
+      storeWalletData(newEncryptedData);
+
+      // Update session with new PIN
+      setCurrentPin(newPin);
+      localStorage.setItem('session_pin', newPin);
+
+      // Re-encrypt wallets array with new PIN
+      const walletsJson = JSON.stringify(wallets);
+      const newEncryptedWallets = await encryptWalletData(walletsJson, newPin);
+      localStorage.setItem('encrypted_wallets', newEncryptedWallets);
+
+      return;
+    } catch (error) {
+      throw new Error('Failed to change PIN: ' + error);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -327,13 +359,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         wallets,
         login,
         logout,
+        resetWallet,
         initializeWallet,
         importWallet,
         addWallet,
-        switchWallet,
         removeWallet,
-        resetWallet,
-        toggleFavorite
+        switchWallet,
+        toggleFavorite,
+        changePin,
       }}
     >
       {children}

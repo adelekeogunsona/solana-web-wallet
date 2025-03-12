@@ -1,9 +1,18 @@
 import { useState } from 'react';
 import { useSettings } from '../hooks/useSettings';
+import { useAuth } from '../hooks/useAuth';
+import PinInput from '../components/PinInput';
 import { validateAndCheckRPCHealth } from '../utils/rpcValidation';
 
 export default function Settings() {
-  const { settings, addRpcEndpoint, removeRpcEndpoint, setBalanceReloadInterval } = useSettings();
+  const { settings, addRpcEndpoint, removeRpcEndpoint, setBalanceReloadInterval, setAutoLogoutDuration } = useSettings();
+  const { changePin } = useAuth();
+  const [showPinChange, setShowPinChange] = useState(false);
+  const [currentPinInput, setCurrentPinInput] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmNewPin, setConfirmNewPin] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [newRpcEndpoint, setNewRpcEndpoint] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -38,6 +47,33 @@ export default function Settings() {
     }
   };
 
+  const handlePinChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    try {
+      // Validate new PIN
+      if (newPin !== confirmNewPin) {
+        throw new Error('New PINs do not match');
+      }
+      if (newPin.length !== 6 || !/^\d{6}$/.test(newPin)) {
+        throw new Error('PIN must be exactly 6 digits');
+      }
+
+      // Change PIN
+      await changePin(currentPinInput, newPin);
+
+      setSuccess('PIN changed successfully');
+      setShowPinChange(false);
+      setCurrentPinInput('');
+      setNewPin('');
+      setConfirmNewPin('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to change PIN');
+    }
+  };
+
   return (
     <div>
       <h1 className="text-3xl font-bold mb-8">Settings</h1>
@@ -49,19 +85,104 @@ export default function Settings() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">Auto-logout Duration</label>
-              <select className="input-primary w-full">
-                <option value="5">5 minutes</option>
-                <option value="15">15 minutes</option>
-                <option value="30">30 minutes</option>
-                <option value="60">1 hour</option>
+              <select
+                className="input-primary w-full"
+                value={settings.autoLogoutDuration}
+                onChange={(e) => setAutoLogoutDuration(Number(e.target.value))}
+              >
+                <option value={300000}>5 minutes</option>
+                <option value={900000}>15 minutes</option>
+                <option value={1800000}>30 minutes</option>
+                <option value={3600000}>1 hour</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">Master Password</label>
-              <button className="btn-secondary">Change Password</button>
+              <label className="block text-sm font-medium mb-2">PIN Code</label>
+              <button
+                className="btn-secondary"
+                onClick={() => setShowPinChange(true)}
+              >
+                Change PIN
+              </button>
             </div>
           </div>
         </section>
+
+        {/* PIN Change Modal */}
+        {showPinChange && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="card max-w-md w-full">
+              <h3 className="text-xl font-bold mb-4">Change PIN</h3>
+              <form onSubmit={handlePinChange} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Current PIN</label>
+                  <div className="flex justify-center">
+                    <PinInput
+                      value={currentPinInput}
+                      onChange={setCurrentPinInput}
+                      error={!!error}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">New PIN</label>
+                  <div className="flex justify-center">
+                    <PinInput
+                      value={newPin}
+                      onChange={setNewPin}
+                      error={!!error}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Confirm New PIN</label>
+                  <div className="flex justify-center">
+                    <PinInput
+                      value={confirmNewPin}
+                      onChange={setConfirmNewPin}
+                      error={!!error}
+                    />
+                  </div>
+                </div>
+
+                {error && (
+                  <p className="text-red-500 text-sm">{error}</p>
+                )}
+                {success && (
+                  <p className="text-green-500 text-sm">{success}</p>
+                )}
+
+                <div className="flex space-x-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPinChange(false);
+                      setCurrentPinInput('');
+                      setNewPin('');
+                      setConfirmNewPin('');
+                      setError('');
+                      setSuccess('');
+                    }}
+                    className="btn-secondary flex-1"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary flex-1"
+                    disabled={
+                      currentPinInput.length !== 6 ||
+                      newPin.length !== 6 ||
+                      confirmNewPin.length !== 6
+                    }
+                  >
+                    Change PIN
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Network Settings */}
         <section className="card">

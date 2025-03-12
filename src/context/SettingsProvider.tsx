@@ -37,6 +37,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const setAutoLogoutDuration = (duration: number) => {
+    setSettings(prev => ({
+      ...prev,
+      autoLogoutDuration: duration,
+    }));
+  };
+
   return (
     <SettingsContext.Provider
       value={{
@@ -44,6 +51,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         addRpcEndpoint,
         removeRpcEndpoint,
         setBalanceReloadInterval,
+        setAutoLogoutDuration,
       }}
     >
       {children}

@@ -24,14 +24,15 @@ export interface AuthContextType {
   isInitialized: boolean;
   currentWallet: WalletData | null;
   wallets: WalletData[];
-  login: (password: string) => Promise<void>;
+  login: (pin: string) => Promise<void>;
   logout: () => void;
-  initializeWallet: (password: string, confirmPassword: string) => Promise<void>;
+  resetWallet: () => void;
+  initializeWallet: (pin: string, confirmPin: string) => Promise<void>;
   importWallet: (params: ImportWalletParams) => Promise<void>;
   addWallet: (params: ImportWalletParams) => Promise<void>;
-  switchWallet: (walletId: string) => void;
   removeWallet: (walletId: string) => Promise<void>;
-  resetWallet: () => void;
+  switchWallet: (walletId: string) => void;
+  changePin: (currentPin: string, newPin: string) => Promise<void>;
   toggleFavorite: (walletId: string) => Promise<void>;
 }
 
@@ -48,5 +49,6 @@ export const AuthContext = createContext<AuthContextType>({
   switchWallet: () => {},
   removeWallet: async () => {},
   resetWallet: () => {},
+  changePin: async () => {},
   toggleFavorite: async () => {},
 });
