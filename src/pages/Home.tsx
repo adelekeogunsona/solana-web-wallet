@@ -62,7 +62,7 @@ const SeedPhrasePopup = ({ seedPhrase, onClose }: SeedPhrasePopupProps) => {
 };
 
 export default function Home() {
-  const { currentWallet, wallets = [], switchWallet } = useContext(AuthContext);
+  const { currentWallet, wallets = [], switchWallet, removeWallet } = useContext(AuthContext);
   const [seedPhrase, setSeedPhrase] = useState<string | null>(null);
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +113,15 @@ export default function Home() {
     setSeedPhrase(null);
   };
 
+  const handleDelete = async (walletId: string) => {
+    try {
+      await removeWallet(walletId);
+    } catch (error) {
+      console.error('Failed to delete wallet:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete wallet');
+    }
+  };
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -158,6 +167,7 @@ export default function Home() {
                 address={wallet.publicKey}
                 balance={balances[wallet.publicKey]}
                 isActive={currentWallet?.id === wallet.id}
+                onDelete={currentWallet?.id !== wallet.id ? () => handleDelete(wallet.id) : undefined}
               />
             </div>
           ))}
