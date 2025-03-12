@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import PinInput from '../components/PinInput';
 
 export default function Login() {
   const [pin, setPin] = useState('');
@@ -25,14 +26,6 @@ export default function Login() {
     }
   };
 
-  const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    // Only allow numbers and limit to 6 digits
-    if (/^\d{0,6}$/.test(value)) {
-      setPin(value);
-    }
-  };
-
   const handleReset = () => {
     resetWallet();
     navigate('/setup');
@@ -52,18 +45,15 @@ export default function Login() {
               <label htmlFor="pin" className="block text-sm font-medium mb-2">
                 PIN Code
               </label>
-              <input
-                id="pin"
-                type="password"
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
-                value={pin}
-                onChange={handlePinChange}
-                className="input-primary w-full text-center text-2xl tracking-widest"
-                placeholder="••••••"
-                required
-              />
+              <div className="flex justify-center">
+                <PinInput
+                  id="pin"
+                  value={pin}
+                  onChange={setPin}
+                  error={!!error}
+                  disabled={isLoading}
+                />
+              </div>
               {error && (
                 <p className="mt-2 text-sm text-red-500">{error}</p>
               )}

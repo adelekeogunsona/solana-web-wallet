@@ -10,11 +10,11 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-solana-green text-black px-4 py-2 rounded-lg hover:opacity-90 transition-opacity;
+    @apply bg-solana-green text-black px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-secondary {
-    @apply bg-solana-purple text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity;
+    @apply bg-solana-purple text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .input-primary {
@@ -22,6 +22,20 @@
   }
 
   .card {
-    @apply bg-solana-gray p-6 rounded-xl border border-gray-700;
+    @apply bg-solana-gray p-6 rounded-xl border border-gray-700 shadow-lg;
+  }
+}
+
+/* PIN Input specific animations */
+.pin-input-cursor {
+  animation: pinCursorBlink 1s step-end infinite;
+}
+
+@keyframes pinCursorBlink {
+  from, to {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
   }
 }

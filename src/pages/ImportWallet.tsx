@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import PinInput from '../components/PinInput';
 
 export default function ImportWallet() {
   const [importType, setImportType] = useState<'seed' | 'private'>('seed');
@@ -12,18 +13,6 @@ export default function ImportWallet() {
   const [isLoading, setIsLoading] = useState(false);
   const { importWallet } = useAuth();
   const navigate = useNavigate();
-
-  const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'pin' | 'confirm') => {
-    const value = e.target.value;
-    // Only allow numbers and limit to 6 digits
-    if (/^\d{0,6}$/.test(value)) {
-      if (field === 'pin') {
-        setPin(value);
-      } else {
-        setConfirmPin(value);
-      }
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,9 +86,6 @@ export default function ImportWallet() {
                   placeholder="Enter your 12 or 24-word seed phrase"
                   required
                 />
-                <p className="mt-2 text-sm text-gray-400">
-                  Enter your seed phrase with words separated by spaces
-                </p>
               </div>
             ) : (
               <div>
@@ -122,39 +108,31 @@ export default function ImportWallet() {
               <label htmlFor="pin" className="block text-sm font-medium mb-2">
                 PIN Code
               </label>
-              <input
-                id="pin"
-                type="password"
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
-                value={pin}
-                onChange={(e) => handlePinChange(e, 'pin')}
-                className="input-primary w-full text-center text-2xl tracking-widest"
-                placeholder="••••••"
-                required
-              />
-              <p className="mt-2 text-sm text-gray-400">
-                PIN must be exactly 6 digits
-              </p>
+              <div className="flex justify-center">
+                <PinInput
+                  id="pin"
+                  value={pin}
+                  onChange={setPin}
+                  error={!!error}
+                  disabled={isLoading}
+                  autoFocus={true}
+                />
+              </div>
             </div>
 
             <div>
               <label htmlFor="confirmPin" className="block text-sm font-medium mb-2">
                 Confirm PIN
               </label>
-              <input
-                id="confirmPin"
-                type="password"
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
-                value={confirmPin}
-                onChange={(e) => handlePinChange(e, 'confirm')}
-                className="input-primary w-full text-center text-2xl tracking-widest"
-                placeholder="••••••"
-                required
-              />
+              <div className="flex justify-center">
+                <PinInput
+                  id="confirmPin"
+                  value={confirmPin}
+                  onChange={setConfirmPin}
+                  error={!!error}
+                  disabled={isLoading}
+                />
+              </div>
             </div>
 
             {error && (
