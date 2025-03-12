@@ -10,7 +10,8 @@ import {
   decryptWalletData,
   storeWalletData,
   getStoredWalletData,
-  uint8ArrayToHex
+  uint8ArrayToHex,
+  generateRandomWalletName
 } from '../utils/wallet';
 import { Keypair } from '@solana/web3.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -123,10 +124,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('wallet_data');
     localStorage.removeItem('session_timestamp');
     localStorage.removeItem('encrypted_wallets');
+    localStorage.removeItem('wallet_settings');
+    localStorage.removeItem('session_pin');
     setIsInitialized(false);
     setIsAuthenticated(false);
     setCurrentWallet(null);
     setWallets([]);
+    // Reset settings to defaults
+    if (settingsContext) {
+      settingsContext.settings = defaultSettings;
+    }
   };
 
   const initializeWallet = async (pin: string, confirmPin: string) => {
@@ -186,7 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return {
       id: uuidv4(),
-      name: params.name || `Wallet ${wallets.length + 1}`,
+      name: params.name || generateRandomWalletName(),
       mnemonic,
       privateKey: uint8ArrayToHex(keypair.secretKey),
       publicKey: keypair.publicKey.toBase58()

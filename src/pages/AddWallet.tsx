@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { generateNewWallet } from '../utils/wallet';
+import { generateNewWallet, generateRandomWalletName } from '../utils/wallet';
 
 export function AddWallet() {
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ export function AddWallet() {
       await addWallet({
         type: 'seed',
         seedPhrase: mnemonic,
-        name: walletName.trim() || `Wallet ${Date.now()}`,
+        name: walletName.trim() || generateRandomWalletName(),
         password: '', // This will be handled by the context using the existing PIN
         confirmPassword: ''
       });

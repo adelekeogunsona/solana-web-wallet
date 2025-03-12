@@ -189,3 +189,17 @@ export function storeWalletData(encryptedData: string): void {
 export function getStoredWalletData(): string | null {
   return localStorage.getItem('wallet_data');
 }
+
+export function generateRandomWalletName(): string {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  let result = '';
+  const length = 8;
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(array[i] % characters.length);
+  }
+
+  return result;
+}

@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { ImportWalletParams } from '../context/authContextTypes';
+import { generateRandomWalletName } from '../utils/wallet';
 
 export function AddWalletImport() {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ export function AddWalletImport() {
         type: importType,
         seedPhrase: formData.seedPhrase,
         privateKey: formData.privateKey,
-        name: formData.name || `Wallet ${Date.now()}`,
+        name: formData.name || generateRandomWalletName(),
         password: '', // This will be handled by the context using the existing PIN
         confirmPassword: ''
       };
