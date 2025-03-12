@@ -1,5 +1,5 @@
 import { useState, useEffect, ReactNode } from 'react';
-import { Settings, defaultSettings } from './settingsTypes';
+import { Settings, defaultSettings, Theme } from './settingsTypes';
 import { SettingsContext } from './settingsContext';
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -7,6 +7,30 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const savedSettings = localStorage.getItem('wallet_settings');
     return savedSettings ? JSON.parse(savedSettings) : defaultSettings;
   });
+
+  // Handle theme changes
+  useEffect(() => {
+    const handleThemeChange = (e: MediaQueryListEvent) => {
+      if (settings.theme === 'system') {
+        document.documentElement.classList.toggle('dark', e.matches);
+      }
+    };
+
+    const applyTheme = () => {
+      const isDark = settings.theme === 'dark' ||
+        (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', isDark);
+    };
+
+    // Apply theme immediately
+    applyTheme();
+
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', handleThemeChange);
+
+    return () => mediaQuery.removeEventListener('change', handleThemeChange);
+  }, [settings.theme]);
 
   useEffect(() => {
     localStorage.setItem('wallet_settings', JSON.stringify(settings));
@@ -44,6 +68,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const setTheme = (theme: Theme) => {
+    setSettings(prev => ({
+      ...prev,
+      theme,
+    }));
+  };
+
   return (
     <SettingsContext.Provider
       value={{
@@ -52,6 +83,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         removeRpcEndpoint,
         setBalanceReloadInterval,
         setAutoLogoutDuration,
+        setTheme,
       }}
     >
       {children}

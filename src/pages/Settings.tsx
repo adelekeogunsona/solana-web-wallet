@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { useAuth } from '../hooks/useAuth';
+import { Theme } from '../context/settingsTypes';
 import PinInput from '../components/PinInput';
 import { validateAndCheckRPCHealth } from '../utils/rpcValidation';
 
 export default function Settings() {
-  const { settings, addRpcEndpoint, removeRpcEndpoint, setBalanceReloadInterval, setAutoLogoutDuration } = useSettings();
+  const { settings, addRpcEndpoint, removeRpcEndpoint, setBalanceReloadInterval, setAutoLogoutDuration, setTheme } = useSettings();
   const { changePin } = useAuth();
   const [showPinChange, setShowPinChange] = useState(false);
   const [currentPinInput, setCurrentPinInput] = useState('');
@@ -277,21 +278,21 @@ export default function Settings() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">Theme</label>
-              <select className="input-primary w-full">
+              <select
+                className="input-primary w-full"
+                value={settings.theme}
+                onChange={(e) => setTheme(e.target.value as Theme)}
+              >
                 <option value="dark">Dark</option>
                 <option value="light">Light</option>
                 <option value="system">System</option>
               </select>
+              <p className="text-sm text-gray-400 mt-2">
+                {settings.theme === 'system' ?
+                  "Follows your system's theme settings" :
+                  `Always use ${settings.theme} theme`}
+              </p>
             </div>
-          </div>
-        </section>
-
-        {/* Backup & Recovery */}
-        <section className="card">
-          <h2 className="text-xl font-bold mb-4">Backup & Recovery</h2>
-          <div className="space-y-4">
-            <button className="btn-secondary">Export Encrypted Backup</button>
-            <button className="btn-secondary">View Recovery Phrase</button>
           </div>
         </section>
       </div>

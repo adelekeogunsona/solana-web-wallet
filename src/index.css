@@ -4,7 +4,11 @@
 
 @layer base {
   body {
-    @apply bg-solana-dark text-white min-h-screen;
+    @apply bg-white text-black min-h-screen;
+  }
+
+  .dark body {
+    @apply bg-solana-dark text-white;
   }
 }
 
@@ -18,11 +22,11 @@
   }
 
   .input-primary {
-    @apply bg-solana-gray text-white px-4 py-2 rounded-lg border border-gray-600 focus:outline-none focus:border-solana-green;
+    @apply bg-white text-black dark:bg-solana-gray dark:text-white px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:outline-none focus:border-solana-green;
   }
 
   .card {
-    @apply bg-solana-gray p-6 rounded-xl border border-gray-700 shadow-lg;
+    @apply bg-white dark:bg-solana-gray p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg;
   }
 }
 
