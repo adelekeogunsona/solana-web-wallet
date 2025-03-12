@@ -1,15 +1,40 @@
 import { useState } from 'react';
 import { useSettings } from '../hooks/useSettings';
+import { validateAndCheckRPCHealth } from '../utils/rpcValidation';
 
 export default function Settings() {
   const { settings, addRpcEndpoint, removeRpcEndpoint, setBalanceReloadInterval } = useSettings();
   const [newRpcEndpoint, setNewRpcEndpoint] = useState('');
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  const handleAddRpc = (e: React.FormEvent) => {
+  const handleAddRpc = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newRpcEndpoint.trim()) {
+    if (!newRpcEndpoint.trim()) return;
+
+    setIsValidating(true);
+    setValidationError(null);
+
+    try {
+      const result = await validateAndCheckRPCHealth(newRpcEndpoint.trim());
+
+      if (!result.isValid) {
+        setValidationError(result.error || 'Invalid RPC endpoint');
+        return;
+      }
+
+      if (!result.isHealthy) {
+        setValidationError(result.error || 'RPC endpoint is not responding');
+        return;
+      }
+
       addRpcEndpoint(newRpcEndpoint.trim());
       setNewRpcEndpoint('');
+      setValidationError(null);
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : 'Failed to validate RPC endpoint');
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -80,21 +105,30 @@ export default function Settings() {
                     </button>
                   </div>
                 ))}
-                <form onSubmit={handleAddRpc} className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={newRpcEndpoint}
-                    onChange={(e) => setNewRpcEndpoint(e.target.value)}
-                    placeholder="Enter RPC endpoint URL (e.g., https://your-rpc-endpoint)"
-                    className="input-primary flex-grow"
-                  />
-                  <button
-                    type="submit"
-                    className="btn-primary px-3 py-2"
-                    disabled={!newRpcEndpoint.trim()}
-                  >
-                    Add
-                  </button>
+                <form onSubmit={handleAddRpc} className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={newRpcEndpoint}
+                      onChange={(e) => {
+                        setNewRpcEndpoint(e.target.value);
+                        setValidationError(null);
+                      }}
+                      placeholder="Enter RPC endpoint URL (e.g., https://your-rpc-endpoint)"
+                      className={`input-primary flex-grow ${validationError ? 'border-red-500' : ''}`}
+                      disabled={isValidating}
+                    />
+                    <button
+                      type="submit"
+                      className="btn-primary px-3 py-2"
+                      disabled={!newRpcEndpoint.trim() || isValidating}
+                    >
+                      {isValidating ? 'Validating...' : 'Add'}
+                    </button>
+                  </div>
+                  {validationError && (
+                    <p className="text-sm text-red-500">{validationError}</p>
+                  )}
                 </form>
               </div>
             </div>
