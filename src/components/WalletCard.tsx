@@ -2,31 +2,30 @@ interface WalletCardProps {
   name: string;
   address: string;
   balance?: number;
-  selected?: boolean;
-  onClick?: () => void;
+  isActive?: boolean;
 }
 
-export default function WalletCard({ name, address, balance, selected, onClick }: WalletCardProps) {
+export default function WalletCard({ name, address, balance, isActive }: WalletCardProps) {
+  const shortAddress = `${address.slice(0, 4)}...${address.slice(-4)}`;
+
   return (
-    <div
-      className={`card cursor-pointer transition-all ${
-        selected ? 'border-solana-green' : 'hover:border-solana-purple'
-      }`}
-      onClick={onClick}
-    >
-      <div className="flex justify-between items-start">
+    <div className={`bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg ${isActive ? 'ring-2 ring-primary' : ''}`}>
+      <div className="flex justify-between items-start mb-4">
         <div>
-          <h3 className="text-lg font-medium">{name}</h3>
-          <p className="text-sm text-gray-400 mt-1">
-            {address.slice(0, 4)}...{address.slice(-4)}
-          </p>
+          <h3 className="text-lg font-semibold">{name}</h3>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">{shortAddress}</p>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-gray-400">Balance</p>
-          <p className="text-lg font-medium text-white">
-            {balance !== undefined ? `${balance.toFixed(4)} SOL` : 'Loading...'}
-          </p>
-        </div>
+        {isActive && (
+          <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
+            Active
+          </span>
+        )}
+      </div>
+      <div className="mt-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400">Balance</p>
+        <p className="text-2xl font-bold">
+          {balance !== undefined ? `${balance} SOL` : '...'}
+        </p>
       </div>
     </div>
   );

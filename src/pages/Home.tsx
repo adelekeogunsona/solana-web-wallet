@@ -4,6 +4,7 @@ import { AuthContext } from '../context/authContextTypes';
 import WalletCard from '../components/WalletCard';
 import TokenCard from '../components/TokenCard';
 import TransactionList from '../components/TransactionList';
+import { AddWalletButton } from '../components/AddWalletButton';
 import { rpcManager } from '../utils/rpc';
 
 const DUMMY_TOKENS = [
@@ -61,9 +62,10 @@ const SeedPhrasePopup = ({ seedPhrase, onClose }: SeedPhrasePopupProps) => {
 };
 
 export default function Home() {
-  const { currentWallet } = useContext(AuthContext);
+  const { currentWallet, wallets = [], switchWallet } = useContext(AuthContext);
   const [seedPhrase, setSeedPhrase] = useState<string | null>(null);
-  const [balance, setBalance] = useState<number | null>(null);
+  const [balances, setBalances] = useState<Record<string, number>>({});
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const tempWalletData = localStorage.getItem('temp_wallet_data');
@@ -78,31 +80,51 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const fetchBalance = async () => {
-      if (currentWallet?.publicKey) {
-        try {
-          const solBalance = await rpcManager.getBalance(currentWallet.publicKey);
-          setBalance(solBalance);
-        } catch (error) {
-          console.error('Error fetching balance:', error);
-          setBalance(null);
-        }
-      } else {
-        setBalance(null);
+    const fetchBalances = async () => {
+      if (!Array.isArray(wallets)) {
+        setError('No wallets available');
+        return;
       }
+
+      const newBalances: Record<string, number> = {};
+
+      for (const wallet of wallets) {
+        try {
+          const solBalance = await rpcManager.getBalance(wallet.publicKey);
+          newBalances[wallet.publicKey] = solBalance;
+        } catch (error) {
+          console.error(`Error fetching balance for ${wallet.publicKey}:`, error);
+          newBalances[wallet.publicKey] = 0;
+        }
+      }
+
+      setBalances(newBalances);
     };
 
-    fetchBalance();
-    // Set up an interval to refresh the balance every 30 seconds
-    const intervalId = setInterval(fetchBalance, 30000);
+    fetchBalances();
+    // Set up an interval to refresh balances every 30 seconds
+    const intervalId = setInterval(fetchBalances, 30000);
 
     return () => clearInterval(intervalId);
-  }, [currentWallet?.publicKey]);
+  }, [wallets]);
 
   const handleCloseSeedPhrase = () => {
     localStorage.removeItem('temp_wallet_data');
     setSeedPhrase(null);
   };
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">{error}</p>
+          <Link to="/setup" className="btn-primary">
+            Setup Wallet
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -119,18 +141,27 @@ export default function Home() {
             <Link to="/transfer" className="btn-primary">
               Send / Receive
             </Link>
-            <button className="btn-secondary">
-              Add New Wallet
-            </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <WalletCard
-            name="Main Wallet"
-            address={currentWallet?.publicKey || 'No wallet connected'}
-            balance={balance !== null ? balance : undefined}
-          />
+          {Array.isArray(wallets) && wallets.map((wallet) => (
+            <div
+              key={wallet.id}
+              onClick={() => switchWallet(wallet.id)}
+              className={`cursor-pointer transition-transform hover:scale-[1.02] ${
+                currentWallet?.id === wallet.id ? 'ring-2 ring-primary' : ''
+              }`}
+            >
+              <WalletCard
+                name={wallet.name || 'Unnamed Wallet'}
+                address={wallet.publicKey}
+                balance={balances[wallet.publicKey]}
+                isActive={currentWallet?.id === wallet.id}
+              />
+            </div>
+          ))}
+          <AddWalletButton />
         </div>
       </div>
 

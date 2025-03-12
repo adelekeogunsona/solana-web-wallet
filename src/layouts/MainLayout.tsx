@@ -28,7 +28,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
             </div>
             <nav className="flex items-center space-x-4">
               <Link to="/" className="text-gray-300 hover:text-white">
-                Wallets
+                Home
               </Link>
               <Link to="/settings" className="text-gray-300 hover:text-white">
                 Settings

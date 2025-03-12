@@ -11,6 +11,7 @@ import {
   uint8ArrayToHex
 } from '../utils/wallet';
 import { Keypair } from '@solana/web3.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const SESSION_TIMEOUT = 10 * 60 * 1000; // 10 minutes in milliseconds
 
@@ -20,22 +21,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.getItem('wallet_initialized') === 'true'
   );
   const [currentWallet, setCurrentWallet] = useState<WalletData | null>(null);
+  const [wallets, setWallets] = useState<WalletData[]>([]);
+  const [currentPin, setCurrentPin] = useState<string>('');
 
   // Check session validity on component mount and after any authentication state change
   useEffect(() => {
     const checkSession = () => {
       const sessionTimestamp = localStorage.getItem('session_timestamp');
-      const encryptedWallet = localStorage.getItem('encrypted_wallet');
+      const encryptedWallets = localStorage.getItem('encrypted_wallets');
+      const sessionPin = localStorage.getItem('session_pin');
 
-      if (sessionTimestamp && encryptedWallet) {
+      if (sessionTimestamp && encryptedWallets && sessionPin) {
         const now = Date.now();
         const lastActivity = parseInt(sessionTimestamp, 10);
 
         if (now - lastActivity < SESSION_TIMEOUT) {
           // Session is still valid
-          const walletData: WalletData = JSON.parse(encryptedWallet);
-          setCurrentWallet(walletData);
+          const walletsData: WalletData[] = JSON.parse(encryptedWallets);
+          setWallets(walletsData);
+          // Set the first wallet as current if none is selected
+          if (!currentWallet && walletsData.length > 0) {
+            setCurrentWallet(walletsData[0]);
+          }
           setIsAuthenticated(true);
+          setCurrentPin(sessionPin); // Restore the PIN from session
           // Update the timestamp
           localStorage.setItem('session_timestamp', now.toString());
         } else {
@@ -51,18 +60,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const intervalId = setInterval(checkSession, 60000);
 
     return () => clearInterval(intervalId);
-  }, []);
+  }, [currentWallet]);
 
   const handleSessionExpiry = () => {
     localStorage.removeItem('session_timestamp');
-    localStorage.removeItem('encrypted_wallet');
+    localStorage.removeItem('encrypted_wallets');
+    localStorage.removeItem('session_pin');
     setIsAuthenticated(false);
     setCurrentWallet(null);
+    setWallets([]);
+    setCurrentPin('');
   };
 
-  const updateSessionTimestamp = (wallet: WalletData) => {
+  const updateSessionTimestamp = (updatedWallets: WalletData[], pin?: string) => {
     localStorage.setItem('session_timestamp', Date.now().toString());
-    localStorage.setItem('encrypted_wallet', JSON.stringify(wallet));
+    localStorage.setItem('encrypted_wallets', JSON.stringify(updatedWallets));
+    // Use provided pin or existing currentPin
+    const pinToUse = pin || currentPin;
+    if (pinToUse) {
+      localStorage.setItem('session_pin', pinToUse);
+    }
   };
 
   const login = async (pin: string) => {
@@ -77,10 +94,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const decryptedData = await decryptWalletData(encryptedData, pin);
-      const walletData: WalletData = JSON.parse(decryptedData);
-      setCurrentWallet(walletData);
+      const walletsData: WalletData[] = JSON.parse(decryptedData);
+      setWallets(walletsData);
+
+      // Set the first wallet as current if available
+      if (walletsData.length > 0) {
+        setCurrentWallet(walletsData[0]);
+      }
+
       setIsAuthenticated(true);
-      updateSessionTimestamp(walletData);
+      setCurrentPin(pin); // Store the PIN for later use
+      localStorage.setItem('session_pin', pin); // Store PIN in session
+      updateSessionTimestamp(walletsData, pin);
     } catch (error) {
       throw new Error('Invalid PIN or corrupted wallet data: ' + error);
     }
@@ -88,16 +113,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     handleSessionExpiry();
+    setCurrentPin(''); // Clear the stored PIN
   };
 
   const resetWallet = () => {
     localStorage.removeItem('wallet_initialized');
     localStorage.removeItem('wallet_data');
     localStorage.removeItem('session_timestamp');
-    localStorage.removeItem('encrypted_wallet');
+    localStorage.removeItem('encrypted_wallets');
     setIsInitialized(false);
     setIsAuthenticated(false);
     setCurrentWallet(null);
+    setWallets([]);
   };
 
   const initializeWallet = async (pin: string, confirmPin: string) => {
@@ -111,25 +138,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { mnemonic, keypair } = generateNewWallet();
       const walletData: WalletData = {
+        id: uuidv4(),
+        name: 'Main Wallet',
         mnemonic,
         privateKey: uint8ArrayToHex(keypair.secretKey),
         publicKey: keypair.publicKey.toBase58()
       };
 
-      // Store the mnemonic temporarily for the next step
-      localStorage.setItem('temp_wallet_data', JSON.stringify({ mnemonic }));
-
-      const encryptedData = await encryptWalletData(JSON.stringify(walletData), pin);
+      const walletsData = [walletData];
+      const encryptedData = await encryptWalletData(JSON.stringify(walletsData), pin);
       storeWalletData(encryptedData);
       localStorage.setItem('wallet_initialized', 'true');
 
+      setWallets(walletsData);
       setCurrentWallet(walletData);
       setIsInitialized(true);
       setIsAuthenticated(true);
-      updateSessionTimestamp(walletData);
+      setCurrentPin(pin); // Set the current PIN
+      updateSessionTimestamp(walletsData, pin);
     } catch (error) {
       throw new Error('Failed to create wallet: ' + error);
     }
+  };
+
+  const createWalletData = async (params: ImportWalletParams): Promise<WalletData> => {
+    let keypair: Keypair;
+    let mnemonic: string | undefined;
+
+    if (params.type === 'seed') {
+      if (!params.seedPhrase) {
+        throw new Error('Seed phrase is required');
+      }
+      const words = params.seedPhrase.trim().split(/\s+/);
+      if (words.length !== 12 && words.length !== 24) {
+        throw new Error('Invalid seed phrase length. Must be 12 or 24 words');
+      }
+      keypair = getKeypairFromMnemonic(params.seedPhrase);
+      mnemonic = params.seedPhrase;
+    } else {
+      if (!params.privateKey) {
+        throw new Error('Private key is required');
+      }
+      keypair = getKeypairFromPrivateKey(params.privateKey);
+    }
+
+    return {
+      id: uuidv4(),
+      name: params.name || `Wallet ${wallets.length + 1}`,
+      mnemonic,
+      privateKey: uint8ArrayToHex(keypair.secretKey),
+      publicKey: keypair.publicKey.toBase58()
+    };
   };
 
   const importWallet = async (params: ImportWalletParams) => {
@@ -141,40 +200,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      let keypair: Keypair;
-      let mnemonic: string | undefined;
+      const walletData = await createWalletData(params);
+      const walletsData = [walletData];
 
-      if (params.type === 'seed') {
-        if (!params.seedPhrase) {
-          throw new Error('Seed phrase is required');
-        }
-        const words = params.seedPhrase.trim().split(/\s+/);
-        if (words.length !== 12 && words.length !== 24) {
-          throw new Error('Invalid seed phrase length. Must be 12 or 24 words');
-        }
-        keypair = getKeypairFromMnemonic(params.seedPhrase);
-        mnemonic = params.seedPhrase;
-      } else {
-        if (!params.privateKey) {
-          throw new Error('Private key is required');
-        }
-        keypair = getKeypairFromPrivateKey(params.privateKey);
-      }
-
-      const walletData: WalletData = {
-        mnemonic,
-        privateKey: uint8ArrayToHex(keypair.secretKey),
-        publicKey: keypair.publicKey.toBase58()
-      };
-
-      const encryptedData = await encryptWalletData(JSON.stringify(walletData), params.password);
+      const encryptedData = await encryptWalletData(JSON.stringify(walletsData), params.password);
       storeWalletData(encryptedData);
       localStorage.setItem('wallet_initialized', 'true');
 
+      setWallets(walletsData);
       setCurrentWallet(walletData);
       setIsInitialized(true);
       setIsAuthenticated(true);
-      updateSessionTimestamp(walletData);
+      setCurrentPin(params.password); // Set the current PIN
+      updateSessionTimestamp(walletsData, params.password);
     } catch (error) {
       if (error instanceof Error) {
         throw error;
@@ -183,15 +221,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const addWallet = async (params: ImportWalletParams) => {
+    try {
+      const sessionPin = localStorage.getItem('session_pin');
+      if (!sessionPin) {
+        throw new Error('No active session found. Please log in again.');
+      }
+
+      const walletData = await createWalletData(params);
+
+      // Check if wallet with same public key already exists
+      if (wallets.some(w => w.publicKey === walletData.publicKey)) {
+        throw new Error('Wallet with this address already exists');
+      }
+
+      const updatedWallets = [...wallets, walletData];
+      const encryptedData = await encryptWalletData(JSON.stringify(updatedWallets), sessionPin);
+      storeWalletData(encryptedData);
+
+      setWallets(updatedWallets);
+      setCurrentWallet(walletData);
+      updateSessionTimestamp(updatedWallets, sessionPin);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to add wallet: ' + error);
+    }
+  };
+
+  const switchWallet = (walletId: string) => {
+    const wallet = wallets.find(w => w.id === walletId);
+    if (wallet) {
+      setCurrentWallet(wallet);
+      updateSessionTimestamp(wallets);
+    }
+  };
+
+  const removeWallet = async (walletId: string) => {
+    try {
+      // Prevent removing the last wallet
+      if (wallets.length <= 1) {
+        throw new Error('Cannot remove the last wallet');
+      }
+
+      const updatedWallets = wallets.filter(w => w.id !== walletId);
+      const encryptedData = await encryptWalletData(JSON.stringify(updatedWallets), ''); // We'll need to pass the PIN here
+      storeWalletData(encryptedData);
+
+      setWallets(updatedWallets);
+
+      // If removing current wallet, switch to the first available
+      if (currentWallet?.id === walletId) {
+        setCurrentWallet(updatedWallets[0]);
+      }
+
+      updateSessionTimestamp(updatedWallets);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to remove wallet: ' + error);
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       isAuthenticated,
       isInitialized,
       currentWallet,
+      wallets,
       login,
       logout,
       initializeWallet,
       importWallet,
+      addWallet,
+      switchWallet,
+      removeWallet,
       resetWallet,
     }}>
       {children}

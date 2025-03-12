@@ -9,6 +9,8 @@ import Setup from './pages/Setup';
 import Transfer from './pages/Transfer';
 import WalletSetup from './pages/WalletSetup';
 import ImportWallet from './pages/ImportWallet';
+import { AddWallet } from './pages/AddWallet';
+import { AddWalletImport } from './pages/AddWalletImport';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitialized } = useAuth();
@@ -86,14 +88,16 @@ function App() {
             }
           />
           <Route
-            path="/"
+            path="/*"
             element={
               <PrivateRoute>
                 <MainLayout>
                   <Routes>
-                    <Route index element={<Home />} />
+                    <Route path="/" element={<Home />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/transfer" element={<Transfer />} />
+                    <Route path="/add-wallet" element={<AddWallet />} />
+                    <Route path="/add-wallet/import" element={<AddWalletImport />} />
                   </Routes>
                 </MainLayout>
               </PrivateRoute>
