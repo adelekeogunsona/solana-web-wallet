@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { SettingsProvider } from './context/SettingsProvider';
 import { useAuth } from './hooks/useAuth';
 import MainLayout from './layouts/MainLayout';
 import Home from './pages/Home';
@@ -53,58 +54,60 @@ function SetupRoute({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route
-            path="/setup"
-            element={
-              <SetupRoute>
-                <WalletSetup />
-              </SetupRoute>
-            }
-          />
-          <Route
-            path="/setup/create"
-            element={
-              <SetupRoute>
-                <Setup />
-              </SetupRoute>
-            }
-          />
-          <Route
-            path="/setup/import"
-            element={
-              <SetupRoute>
-                <ImportWallet />
-              </SetupRoute>
-            }
-          />
-          <Route
-            path="/login"
-            element={
-              <PublicRoute>
-                <Login />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/*"
-            element={
-              <PrivateRoute>
-                <MainLayout>
-                  <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/transfer" element={<Transfer />} />
-                    <Route path="/add-wallet" element={<AddWallet />} />
-                    <Route path="/add-wallet/import" element={<AddWalletImport />} />
-                  </Routes>
-                </MainLayout>
-              </PrivateRoute>
-            }
-          />
-        </Routes>
-      </Router>
+      <SettingsProvider>
+        <Router>
+          <Routes>
+            <Route
+              path="/setup"
+              element={
+                <SetupRoute>
+                  <WalletSetup />
+                </SetupRoute>
+              }
+            />
+            <Route
+              path="/setup/create"
+              element={
+                <SetupRoute>
+                  <Setup />
+                </SetupRoute>
+              }
+            />
+            <Route
+              path="/setup/import"
+              element={
+                <SetupRoute>
+                  <ImportWallet />
+                </SetupRoute>
+              }
+            />
+            <Route
+              path="/login"
+              element={
+                <PublicRoute>
+                  <Login />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/*"
+              element={
+                <PrivateRoute>
+                  <MainLayout>
+                    <Routes>
+                      <Route path="/" element={<Home />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="/transfer" element={<Transfer />} />
+                      <Route path="/add-wallet" element={<AddWallet />} />
+                      <Route path="/add-wallet/import" element={<AddWalletImport />} />
+                    </Routes>
+                  </MainLayout>
+                </PrivateRoute>
+              }
+            />
+          </Routes>
+        </Router>
+      </SettingsProvider>
     </AuthProvider>
   );
 }

@@ -1,4 +1,18 @@
+import { useState } from 'react';
+import { useSettings } from '../hooks/useSettings';
+
 export default function Settings() {
+  const { settings, addRpcEndpoint, removeRpcEndpoint, setBalanceReloadInterval } = useSettings();
+  const [newRpcEndpoint, setNewRpcEndpoint] = useState('');
+
+  const handleAddRpc = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newRpcEndpoint.trim()) {
+      addRpcEndpoint(newRpcEndpoint.trim());
+      setNewRpcEndpoint('');
+    }
+  };
+
   return (
     <div>
       <h1 className="text-3xl font-bold mb-8">Settings</h1>
@@ -36,13 +50,68 @@ export default function Settings() {
                 <option value="devnet">Devnet</option>
               </select>
             </div>
+
+            {/* RPC Endpoints */}
             <div>
-              <label className="block text-sm font-medium mb-2">RPC Endpoint</label>
-              <input
-                type="text"
+              <label className="block text-sm font-medium mb-2">RPC Endpoints</label>
+              <p className="text-sm text-gray-400 mb-4">
+                Add your own RPC endpoints. You can get them from providers like Alchemy, QuickNode, or run your own node.
+                {settings.rpcEndpoints.length === 0 && (
+                  <span className="text-red-500 block mt-1">
+                    ⚠️ At least one RPC endpoint is required for the wallet to function.
+                  </span>
+                )}
+              </p>
+              <div className="space-y-2">
+                {settings.rpcEndpoints.map((endpoint, index) => (
+                  <div key={index} className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={endpoint}
+                      readOnly
+                      className="input-primary flex-grow"
+                    />
+                    <button
+                      onClick={() => removeRpcEndpoint(endpoint)}
+                      className="btn-secondary px-3 py-2"
+                      disabled={settings.rpcEndpoints.length <= 1}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <form onSubmit={handleAddRpc} className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={newRpcEndpoint}
+                    onChange={(e) => setNewRpcEndpoint(e.target.value)}
+                    placeholder="Enter RPC endpoint URL (e.g., https://your-rpc-endpoint)"
+                    className="input-primary flex-grow"
+                  />
+                  <button
+                    type="submit"
+                    className="btn-primary px-3 py-2"
+                    disabled={!newRpcEndpoint.trim()}
+                  >
+                    Add
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Balance Reload Interval */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Balance Reload Interval</label>
+              <select
                 className="input-primary w-full"
-                placeholder="https://api.mainnet-beta.solana.com"
-              />
+                value={settings.balanceReloadInterval}
+                onChange={(e) => setBalanceReloadInterval(Number(e.target.value))}
+              >
+                <option value={10000}>10 seconds</option>
+                <option value={20000}>20 seconds</option>
+                <option value={30000}>30 seconds</option>
+                <option value={60000}>1 minute</option>
+              </select>
             </div>
           </div>
         </section>

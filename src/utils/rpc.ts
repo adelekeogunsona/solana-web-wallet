@@ -1,11 +1,5 @@
 import { Connection, PublicKey, LAMPORTS_PER_SOL, Commitment } from '@solana/web3.js';
 
-// Add multiple RPCs for failover
-const RPC_URLS = [
-  'https://solana-mainnet.g.alchemy.com/v2/pXbSST9euJExzt2_FS5urgSqdNOmlIzY',
-  'https://crimson-omniscient-county.solana-mainnet.quiknode.pro/1d06d567063ef9e44ac67d19d42c206d0d47ec76'
-];
-
 const CONNECTION_CONFIG = {
   commitment: 'confirmed' as Commitment,
   disableRetryOnRateLimit: false,
@@ -18,13 +12,46 @@ const CONNECTION_CONFIG = {
 class RPCManager {
   private connections: Connection[];
   private currentIndex: number;
+  private requestCount: number;
+  private lastRequestTime: number;
 
-  constructor() {
-    this.connections = RPC_URLS.map(url => new Connection(url, CONNECTION_CONFIG));
+  constructor(rpcUrls: string[] = []) {
+    this.connections = rpcUrls.map(url => new Connection(url, CONNECTION_CONFIG));
+    this.currentIndex = 0;
+    this.requestCount = 0;
+    this.lastRequestTime = Date.now();
+  }
+
+  updateConnections(rpcUrls: string[]) {
+    this.connections = rpcUrls.map(url => new Connection(url, CONNECTION_CONFIG));
     this.currentIndex = 0;
   }
 
+  private async sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private async checkRateLimit(): Promise<void> {
+    // Reset counter if more than a second has passed
+    const now = Date.now();
+    if (now - this.lastRequestTime > 1000) {
+      this.requestCount = 0;
+      this.lastRequestTime = now;
+    }
+
+    // If we've made 5 requests, wait for a second
+    if (this.requestCount >= 5) {
+      await this.sleep(1000);
+      this.requestCount = 0;
+      this.lastRequestTime = Date.now();
+    }
+
+    this.requestCount++;
+  }
+
   private async tryConnection<T>(callback: (connection: Connection) => Promise<T>): Promise<T> {
+    await this.checkRateLimit();
+
     const startIndex = this.currentIndex;
     let lastError: Error | null = null;
 
@@ -64,4 +91,7 @@ class RPCManager {
   }
 }
 
-export const rpcManager = new RPCManager();
+// Create a singleton instance
+const rpcManager = new RPCManager();
+
+export { rpcManager, RPCManager };

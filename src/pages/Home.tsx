@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../context/authContextTypes';
+import { useSettings } from '../hooks/useSettings';
 import TokenCard from '../components/TokenCard';
 import WalletGrid from '../components/WalletGrid';
 import { rpcManager } from '../utils/rpc';
@@ -61,6 +62,7 @@ const SeedPhrasePopup = ({ seedPhrase, onClose }: SeedPhrasePopupProps) => {
 
 export default function Home() {
   const { currentWallet, wallets = [], switchWallet, removeWallet } = useContext(AuthContext);
+  const { settings } = useSettings();
   const [seedPhrase, setSeedPhrase] = useState<string | null>(null);
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
@@ -78,10 +80,23 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    // Update RPC endpoints when settings change
+    if (settings.rpcEndpoints.length === 0) {
+      setError('Please configure at least one RPC endpoint in Settings');
+      return;
+    }
+    rpcManager.updateConnections(settings.rpcEndpoints);
+  }, [settings.rpcEndpoints]);
+
+  useEffect(() => {
     const fetchBalances = async () => {
       if (!Array.isArray(wallets)) {
         setError('No wallets available');
         return;
+      }
+
+      if (settings.rpcEndpoints.length === 0) {
+        return; // Don't try to fetch balances if no RPC endpoints are configured
       }
 
       const newBalances: Record<string, number> = {};
@@ -100,11 +115,11 @@ export default function Home() {
     };
 
     fetchBalances();
-    // Set up an interval to refresh balances every 30 seconds
-    const intervalId = setInterval(fetchBalances, 30000);
+    // Set up an interval to refresh balances based on settings
+    const intervalId = setInterval(fetchBalances, settings.balanceReloadInterval);
 
     return () => clearInterval(intervalId);
-  }, [wallets]);
+  }, [wallets, settings.balanceReloadInterval, settings.rpcEndpoints]);
 
   const handleCloseSeedPhrase = () => {
     localStorage.removeItem('temp_wallet_data');
@@ -125,9 +140,16 @@ export default function Home() {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
-          <Link to="/setup" className="btn-primary">
-            Setup Wallet
-          </Link>
+          {settings.rpcEndpoints.length === 0 && (
+            <Link to="/settings" className="btn-primary">
+              Configure RPC Endpoint
+            </Link>
+          )}
+          {settings.rpcEndpoints.length > 0 && (
+            <Link to="/setup" className="btn-primary">
+              Setup Wallet
+            </Link>
+          )}
         </div>
       </div>
     );
