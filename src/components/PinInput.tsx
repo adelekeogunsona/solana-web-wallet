@@ -1,17 +1,27 @@
 import React, { useRef, useEffect, useState } from 'react';
 
 interface PinInputProps {
-  value: string;
-  onChange: (value: string) => void;
+  value?: string;
+  onChange?: (value: string) => void;
+  onComplete?: (value: string) => void;
   error?: boolean;
   disabled?: boolean;
   id?: string;
   autoFocus?: boolean;
 }
 
-export default function PinInput({ value, onChange, error, disabled, id, autoFocus = false }: PinInputProps) {
+export default function PinInput({
+  value: initialValue = '',
+  onChange,
+  onComplete,
+  error,
+  disabled,
+  id,
+  autoFocus = false
+}: PinInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [value, setValue] = useState(initialValue);
   const PIN_LENGTH = 6;
 
   // Create an array of the current pin values, padded with empty strings
@@ -25,9 +35,12 @@ export default function PinInput({ value, onChange, error, disabled, id, autoFoc
     const newValue = e.target.value;
     // Only allow numbers and limit to PIN_LENGTH digits
     if (/^\d*$/.test(newValue) && newValue.length <= PIN_LENGTH) {
-      onChange(newValue);
-      // If PIN is complete, move focus to the next input
+      setValue(newValue);
+      onChange?.(newValue);
+      // If PIN is complete, call onComplete
       if (newValue.length === PIN_LENGTH) {
+        onComplete?.(newValue);
+        // Move focus to the next input
         const nextInput = e.target.form?.querySelector<HTMLInputElement>(`input:not([id="${id}"])`);
         nextInput?.focus();
       }

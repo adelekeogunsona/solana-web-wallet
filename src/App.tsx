@@ -12,6 +12,7 @@ import WalletSetup from './pages/WalletSetup';
 import ImportWallet from './pages/ImportWallet';
 import { AddWallet } from './pages/AddWallet';
 import { AddWalletImport } from './pages/AddWalletImport';
+import { Toaster } from './components/ui/toaster';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitialized } = useAuth();
@@ -106,6 +107,7 @@ function App() {
               }
             />
           </Routes>
+          <Toaster />
         </Router>
       </SettingsProvider>
     </AuthProvider>

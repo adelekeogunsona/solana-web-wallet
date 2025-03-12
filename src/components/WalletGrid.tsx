@@ -18,9 +18,16 @@ interface WalletGridProps {
   activeWalletId?: string;
   onWalletSelect: (id: string) => void;
   onWalletDelete: (id: string) => void;
+  onWalletBackup: (id: string) => void;
 }
 
-export default function WalletGrid({ wallets, activeWalletId, onWalletSelect, onWalletDelete }: WalletGridProps) {
+export default function WalletGrid({
+  wallets,
+  activeWalletId,
+  onWalletSelect,
+  onWalletDelete,
+  onWalletBackup
+}: WalletGridProps) {
   const [isCompactView, setIsCompactView] = useState(() => {
     const saved = localStorage.getItem('wallet_view_compact');
     return saved ? JSON.parse(saved) : false;
@@ -63,64 +70,33 @@ export default function WalletGrid({ wallets, activeWalletId, onWalletSelect, on
             isFavorite={wallet.isFavorite}
             onDelete={() => onWalletDelete(wallet.id)}
             onToggleFavorite={() => handleToggleFavorite(wallet.id)}
+            onBackup={() => onWalletBackup(wallet.id)}
           />
         </div>
       ))}
       {activeTab === 'all' && (
         <Link
           to="/add-wallet"
-          className={`bg-gray-50 dark:bg-gray-900 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-primary dark:hover:border-primary hover:bg-gray-100 dark:hover:bg-gray-800 transition-all group ${
-            isCompactView ? 'p-4 shadow-md' : 'p-6 shadow-lg'
+          className={`bg-gray-50 dark:bg-gray-900 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-primary dark:hover:border-primary hover:bg-gray-100 dark:hover:bg-gray-800 transition-all group flex items-center justify-center ${
+            isCompactView ? 'p-4 shadow-md' : 'h-[240px] shadow-lg'
           }`}
         >
-          {isCompactView ? (
-            <div className="flex justify-between items-center h-full">
-              <div className="truncate">
-                <div className="flex items-center space-x-1">
-                  <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 group-hover:text-primary">Add Wallet</h3>
-                </div>
-              </div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 text-gray-400 group-hover:text-primary transition-colors"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                />
-              </svg>
-            </div>
-          ) : (
-            <div className="h-full flex flex-col justify-between">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-400 group-hover:text-primary">Add Wallet</h3>
-                </div>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-8 w-8 text-gray-400 group-hover:text-primary transition-colors"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                  />
-                </svg>
-              </div>
-              <div className="mt-4">
-                <p className="text-sm text-gray-500 dark:text-gray-400">Create or import a new wallet</p>
-              </div>
-            </div>
-          )}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className={`text-gray-400 group-hover:text-primary transition-colors ${
+              isCompactView ? 'h-5 w-5' : 'h-12 w-12'
+            }`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+            />
+          </svg>
         </Link>
       )}
     </div>

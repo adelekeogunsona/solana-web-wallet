@@ -350,6 +350,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const getWalletBackupData = async (walletId: string) => {
+    const wallet = wallets.find(w => w.id === walletId);
+    if (!wallet) {
+      throw new Error('Wallet not found');
+    }
+
+    // Return seed phrase if available, otherwise return private key
+    return {
+      data: wallet.mnemonic || wallet.privateKey,
+      isPrivateKey: !wallet.mnemonic
+    };
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -367,6 +380,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         switchWallet,
         toggleFavorite,
         changePin,
+        getWalletBackupData
       }}
     >
       {children}
