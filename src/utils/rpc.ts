@@ -18,14 +18,51 @@ interface RPCEndpointStatus {
   latency: number;
 }
 
+interface RPCConfig {
+  requestsPerBatch: number;
+  delayBetweenBatches: number;
+  healthCheckInterval: number;
+  maxQueueSize: number;
+  maxRetries: number;
+  retryDelay: number;
+  balanceCacheDuration: number;
+}
+
+const DEFAULT_CONFIG: RPCConfig = {
+  requestsPerBatch: 5,
+  delayBetweenBatches: 1000,
+  healthCheckInterval: 30000,
+  maxQueueSize: 100,
+  maxRetries: 3,
+  retryDelay: 1000,
+  balanceCacheDuration: 5000, // Cache balances for 5 seconds
+};
+
+interface QueuedRequest<T> {
+  callback: (connection: Connection) => Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason: unknown) => void;
+  retryCount: number;
+}
+
+interface CachedBalance {
+  balance: number;
+  timestamp: number;
+}
+
 class RPCManager {
   private endpoints: RPCEndpointStatus[];
-  private currentIndex: number;
   private requestCount: number;
-  private lastRequestTime: number;
   private healthCheckInterval: NodeJS.Timeout | null;
+  private config: RPCConfig;
+  private requestQueue: Array<QueuedRequest<unknown>>;
+  private isProcessingQueue: boolean;
+  private lastHealthCheck: number;
+  private balanceCache: Map<string, CachedBalance>;
+  private pendingBalanceRequests: Map<string, Promise<number>>;
 
-  constructor(rpcUrls: string[] = []) {
+  constructor(rpcUrls: string[] = [], config: Partial<RPCConfig> = {}) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
     this.endpoints = rpcUrls.map(url => ({
       endpoint: url,
       connection: new Connection(url, CONNECTION_CONFIG),
@@ -33,36 +70,56 @@ class RPCManager {
       lastChecked: 0,
       latency: 0,
     }));
-    this.currentIndex = 0;
     this.requestCount = 0;
-    this.lastRequestTime = Date.now();
     this.healthCheckInterval = null;
+    this.requestQueue = [];
+    this.isProcessingQueue = false;
+    this.lastHealthCheck = 0;
+    this.balanceCache = new Map();
+    this.pendingBalanceRequests = new Map();
     this.startHealthChecks();
   }
 
   private startHealthChecks() {
-    // Clear any existing interval
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
     }
 
-    // Run health checks every 30 seconds
-    this.healthCheckInterval = setInterval(async () => {
-      await this.checkAllEndpoints();
-    }, 30000);
+    // Initial health check
+    this.checkAllEndpoints().catch(console.error);
+
+    this.healthCheckInterval = setInterval(() => {
+      const now = Date.now();
+      // Only run health check if enough time has passed since last check
+      if (now - this.lastHealthCheck >= this.config.healthCheckInterval) {
+        this.checkAllEndpoints().catch(console.error);
+      }
+    }, this.config.healthCheckInterval);
   }
 
   private async checkAllEndpoints() {
+    this.lastHealthCheck = Date.now();
+
     for (let i = 0; i < this.endpoints.length; i++) {
       const endpoint = this.endpoints[i];
-      const health = await checkRPCEndpointHealth(endpoint.endpoint);
+      try {
+        const health = await checkRPCEndpointHealth(endpoint.endpoint);
 
-      this.endpoints[i] = {
-        ...endpoint,
-        isHealthy: health.isHealthy,
-        lastChecked: Date.now(),
-        latency: health.latency || Infinity,
-      };
+        this.endpoints[i] = {
+          ...endpoint,
+          isHealthy: health.isHealthy,
+          lastChecked: Date.now(),
+          latency: health.latency || Infinity,
+        };
+      } catch (error) {
+        console.warn(`Health check failed for endpoint ${endpoint.endpoint}:`, error);
+        this.endpoints[i] = {
+          ...endpoint,
+          isHealthy: false,
+          lastChecked: Date.now(),
+          latency: Infinity,
+        };
+      }
     }
 
     // Sort endpoints by latency (healthy endpoints first)
@@ -71,9 +128,11 @@ class RPCManager {
       if (!a.isHealthy && b.isHealthy) return 1;
       return a.latency - b.latency;
     });
+  }
 
-    // Update current index to point to the healthiest endpoint
-    this.currentIndex = 0;
+  updateConfig(config: Partial<RPCConfig>) {
+    this.config = { ...this.config, ...config };
+    this.startHealthChecks();
   }
 
   updateConnections(rpcUrls: string[]) {
@@ -84,8 +143,7 @@ class RPCManager {
       lastChecked: 0,
       latency: 0,
     }));
-    this.currentIndex = 0;
-    this.checkAllEndpoints();
+    this.checkAllEndpoints().catch(console.error);
   }
 
   private async sleep(ms: number): Promise<void> {
@@ -93,22 +151,46 @@ class RPCManager {
   }
 
   private async checkRateLimit(): Promise<void> {
-    const now = Date.now();
-    if (now - this.lastRequestTime > 1000) {
-      this.requestCount = 0;
-      this.lastRequestTime = now;
-    }
-
-    if (this.requestCount >= 5) {
-      await this.sleep(1000);
-      this.requestCount = 0;
-      this.lastRequestTime = Date.now();
-    }
-
     this.requestCount++;
+
+    if (this.requestCount >= this.config.requestsPerBatch) {
+      await this.sleep(this.config.delayBetweenBatches);
+      this.requestCount = 0;
+    }
   }
 
-  private async tryConnection<T>(callback: (connection: Connection) => Promise<T>): Promise<T> {
+  private async processQueue() {
+    if (this.isProcessingQueue || this.requestQueue.length === 0) return;
+
+    this.isProcessingQueue = true;
+
+    while (this.requestQueue.length > 0) {
+      const request = this.requestQueue.shift()!;
+      try {
+        const result = await this.executeRequest(request.callback, request.retryCount);
+        (request.resolve as (value: unknown) => void)(result);
+      } catch (error) {
+        if (request.retryCount < this.config.maxRetries) {
+          // Re-queue the request with incremented retry count
+          await this.sleep(this.config.retryDelay);
+          this.requestQueue.push({
+            ...request,
+            retryCount: request.retryCount + 1,
+          });
+        } else {
+          request.reject(error);
+        }
+      }
+      await this.checkRateLimit();
+    }
+
+    this.isProcessingQueue = false;
+  }
+
+  private async executeRequest<T>(
+    callback: (connection: Connection) => Promise<T>,
+    retryCount: number
+  ): Promise<T> {
     await this.checkRateLimit();
 
     // Try all healthy endpoints first
@@ -119,8 +201,7 @@ class RPCManager {
           const result = await callback(endpoint.connection);
           return result;
         } catch (error) {
-          console.warn(`RPC ${endpoint.endpoint} failed:`, error);
-          // Mark endpoint as unhealthy
+          console.warn(`RPC ${endpoint.endpoint} failed (retry ${retryCount}):`, error);
           endpoint.isHealthy = false;
           continue;
         }
@@ -131,19 +212,69 @@ class RPCManager {
     for (const endpoint of this.endpoints) {
       try {
         const result = await callback(endpoint.connection);
-        // If successful, mark as healthy
         endpoint.isHealthy = true;
         return result;
       } catch (error) {
-        console.warn(`RPC ${endpoint.endpoint} failed:`, error);
+        console.warn(`RPC ${endpoint.endpoint} failed (retry ${retryCount}):`, error);
         continue;
       }
     }
 
-    throw new Error('All RPC endpoints failed');
+    throw new Error(`All RPC endpoints failed (retry ${retryCount})`);
+  }
+
+  private enqueueRequest<T>(callback: (connection: Connection) => Promise<T>): Promise<T> {
+    if (this.requestQueue.length >= this.config.maxQueueSize) {
+      return Promise.reject(new Error('Request queue is full'));
+    }
+
+    return new Promise<T>((resolve, reject) => {
+      this.requestQueue.push({
+        callback,
+        resolve: resolve as (value: unknown) => void,
+        reject,
+        retryCount: 0,
+      } as QueuedRequest<unknown>);
+      this.processQueue().catch(console.error);
+    });
+  }
+
+  private isCacheValid(cached: CachedBalance): boolean {
+    return Date.now() - cached.timestamp < this.config.balanceCacheDuration;
   }
 
   async getBalance(publicKey: string): Promise<number> {
+    // Check if there's a valid cached balance
+    const cached = this.balanceCache.get(publicKey);
+    if (cached && this.isCacheValid(cached)) {
+      return cached.balance;
+    }
+
+    // Check if there's already a pending request for this address
+    const pending = this.pendingBalanceRequests.get(publicKey);
+    if (pending) {
+      return pending;
+    }
+
+    // Create new balance request
+    const balancePromise = this.fetchBalance(publicKey);
+    this.pendingBalanceRequests.set(publicKey, balancePromise);
+
+    try {
+      const balance = await balancePromise;
+      // Cache the result
+      this.balanceCache.set(publicKey, {
+        balance,
+        timestamp: Date.now(),
+      });
+      return balance;
+    } finally {
+      // Clean up pending request
+      this.pendingBalanceRequests.delete(publicKey);
+    }
+  }
+
+  private async fetchBalance(publicKey: string): Promise<number> {
     const callback = async (connection: Connection) => {
       try {
         const balance = await connection.getBalance(
@@ -157,19 +288,24 @@ class RPCManager {
       }
     };
 
-    return this.tryConnection(callback);
+    return this.enqueueRequest(callback);
   }
 
-  // Clean up when the manager is no longer needed
   destroy() {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = null;
     }
+    // Clear all caches and queues
+    this.requestQueue = [];
+    this.isProcessingQueue = false;
+    this.balanceCache.clear();
+    this.pendingBalanceRequests.clear();
   }
 }
 
-// Create a singleton instance
+// Create a singleton instance with default config
 const rpcManager = new RPCManager();
 
 export { rpcManager, RPCManager };
+export type { RPCConfig };
