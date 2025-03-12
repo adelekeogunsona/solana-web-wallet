@@ -253,8 +253,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const switchWallet = (walletId: string) => {
     const wallet = wallets.find(w => w.id === walletId);
     if (wallet) {
+      // Update lastUsed timestamp
+      const updatedWallets = wallets.map(w =>
+        w.id === walletId
+          ? { ...w, lastUsed: new Date().toISOString() }
+          : w
+      );
+      setWallets(updatedWallets);
       setCurrentWallet(wallet);
-      updateSessionTimestamp(wallets);
+      updateSessionTimestamp(updatedWallets);
+    }
+  };
+
+  const toggleFavorite = async (walletId: string) => {
+    try {
+      const sessionPin = localStorage.getItem('session_pin');
+      if (!sessionPin) {
+        throw new Error('No active session found. Please log in again.');
+      }
+
+      const updatedWallets = wallets.map(w =>
+        w.id === walletId
+          ? { ...w, isFavorite: !w.isFavorite }
+          : w
+      );
+
+      const encryptedData = await encryptWalletData(JSON.stringify(updatedWallets), sessionPin);
+      storeWalletData(encryptedData);
+
+      setWallets(updatedWallets);
+      updateSessionTimestamp(updatedWallets);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to update wallet favorite status: ' + error);
     }
   };
 
@@ -286,20 +319,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{
-      isAuthenticated,
-      isInitialized,
-      currentWallet,
-      wallets,
-      login,
-      logout,
-      initializeWallet,
-      importWallet,
-      addWallet,
-      switchWallet,
-      removeWallet,
-      resetWallet,
-    }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated,
+        isInitialized,
+        currentWallet,
+        wallets,
+        login,
+        logout,
+        initializeWallet,
+        importWallet,
+        addWallet,
+        switchWallet,
+        removeWallet,
+        resetWallet,
+        toggleFavorite
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -6,6 +6,8 @@ export interface WalletData {
   mnemonic?: string;
   privateKey: string;
   publicKey: string;
+  isFavorite?: boolean;
+  lastUsed?: string;
 }
 
 export interface ImportWalletParams {
@@ -30,6 +32,7 @@ export interface AuthContextType {
   switchWallet: (walletId: string) => void;
   removeWallet: (walletId: string) => Promise<void>;
   resetWallet: () => void;
+  toggleFavorite: (walletId: string) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -45,4 +48,5 @@ export const AuthContext = createContext<AuthContextType>({
   switchWallet: () => {},
   removeWallet: async () => {},
   resetWallet: () => {},
+  toggleFavorite: async () => {},
 });

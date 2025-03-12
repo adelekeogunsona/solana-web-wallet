@@ -1,10 +1,8 @@
 import { Link } from 'react-router-dom';
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../context/authContextTypes';
-import WalletCard from '../components/WalletCard';
 import TokenCard from '../components/TokenCard';
-import TransactionList from '../components/TransactionList';
-import { AddWalletButton } from '../components/AddWalletButton';
+import WalletGrid from '../components/WalletGrid';
 import { rpcManager } from '../utils/rpc';
 
 const DUMMY_TOKENS = [
@@ -135,6 +133,16 @@ export default function Home() {
     );
   }
 
+  // Transform wallets data to include balance and lastUsed
+  const walletsWithData = Array.isArray(wallets) ? wallets.map(wallet => ({
+    id: wallet.id,
+    name: wallet.name || 'Unnamed Wallet',
+    address: wallet.publicKey,
+    balance: balances[wallet.publicKey],
+    isFavorite: wallet.isFavorite || false,
+    lastUsed: wallet.lastUsed ? new Date(wallet.lastUsed) : undefined
+  })) : [];
+
   return (
     <div className="space-y-8">
       {seedPhrase && (
@@ -143,55 +151,25 @@ export default function Home() {
           onClose={handleCloseSeedPhrase}
         />
       )}
+
+      <WalletGrid
+        wallets={walletsWithData}
+        activeWalletId={currentWallet?.id}
+        onWalletSelect={switchWallet}
+        onWalletDelete={handleDelete}
+      />
+
       <div>
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">My Wallets</h1>
-          <div className="space-x-4">
-            <Link to="/transfer" className="btn-primary">
-              Send / Receive
-            </Link>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.isArray(wallets) && wallets.map((wallet) => (
-            <div
-              key={wallet.id}
-              onClick={() => switchWallet(wallet.id)}
-              className={`cursor-pointer transition-transform hover:scale-[1.02] ${
-                currentWallet?.id === wallet.id ? 'ring-2 ring-primary' : ''
-              }`}
-            >
-              <WalletCard
-                name={wallet.name || 'Unnamed Wallet'}
-                address={wallet.publicKey}
-                balance={balances[wallet.publicKey]}
-                isActive={currentWallet?.id === wallet.id}
-                onDelete={currentWallet?.id !== wallet.id ? () => handleDelete(wallet.id) : undefined}
-              />
-            </div>
+        <h2 className="text-2xl font-bold mb-6">Tokens</h2>
+        <div className="space-y-4">
+          {DUMMY_TOKENS.map((token) => (
+            <TokenCard
+              key={token.id}
+              name={token.name}
+              symbol={token.symbol}
+              balance={token.balance}
+            />
           ))}
-          <AddWalletButton />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div>
-          <h2 className="text-2xl font-bold mb-6">Tokens</h2>
-          <div className="space-y-4">
-            {DUMMY_TOKENS.map((token) => (
-              <TokenCard
-                key={token.id}
-                name={token.name}
-                symbol={token.symbol}
-                balance={token.balance}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <TransactionList />
         </div>
       </div>
     </div>
