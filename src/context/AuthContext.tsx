@@ -21,19 +21,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   console.log('currentWallet', currentWallet);
 
-  const login = async (password: string) => {
+  const login = async (pin: string) => {
     try {
+      if (pin.length !== 6 || !/^\d{6}$/.test(pin)) {
+        throw new Error('Invalid PIN format');
+      }
+
       const encryptedData = getStoredWalletData();
       if (!encryptedData) {
         throw new Error('No wallet data found');
       }
 
-      const decryptedData = await decryptWalletData(encryptedData, password);
+      const decryptedData = await decryptWalletData(encryptedData, pin);
       const walletData: WalletData = JSON.parse(decryptedData);
       setCurrentWallet(walletData);
       setIsAuthenticated(true);
     } catch (error) {
-      throw new Error('Invalid password or corrupted wallet data: ' + error);
+      throw new Error('Invalid PIN or corrupted wallet data: ' + error);
     }
   };
 
@@ -50,12 +54,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentWallet(null);
   };
 
-  const initializeWallet = async (password: string, confirmPassword: string) => {
-    if (password !== confirmPassword) {
-      throw new Error('Passwords do not match');
+  const initializeWallet = async (pin: string, confirmPin: string) => {
+    if (pin !== confirmPin) {
+      throw new Error('PINs do not match');
     }
-    if (password.length < 8) {
-      throw new Error('Password must be at least 8 characters long');
+    if (pin.length !== 6 || !/^\d{6}$/.test(pin)) {
+      throw new Error('PIN must be exactly 6 digits');
     }
 
     try {
@@ -69,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Store the mnemonic temporarily for the next step
       localStorage.setItem('temp_wallet_data', JSON.stringify({ mnemonic }));
 
-      const encryptedData = await encryptWalletData(JSON.stringify(walletData), password);
+      const encryptedData = await encryptWalletData(JSON.stringify(walletData), pin);
       storeWalletData(encryptedData);
       localStorage.setItem('wallet_initialized', 'true');
 
@@ -83,10 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const importWallet = async (params: ImportWalletParams) => {
     if (params.password !== params.confirmPassword) {
-      throw new Error('Passwords do not match');
+      throw new Error('PINs do not match');
     }
-    if (params.password.length < 8) {
-      throw new Error('Password must be at least 8 characters long');
+    if (params.password.length !== 6 || !/^\d{6}$/.test(params.password)) {
+      throw new Error('PIN must be exactly 6 digits');
     }
 
     try {

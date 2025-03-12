@@ -2,18 +2,28 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
-type ImportMethod = 'seed' | 'private-key';
-
 export default function ImportWallet() {
-  const [method, setMethod] = useState<ImportMethod>('seed');
+  const [importType, setImportType] = useState<'seed' | 'private'>('seed');
   const [seedPhrase, setSeedPhrase] = useState('');
   const [privateKey, setPrivateKey] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { importWallet } = useAuth();
   const navigate = useNavigate();
+
+  const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'pin' | 'confirm') => {
+    const value = e.target.value;
+    // Only allow numbers and limit to 6 digits
+    if (/^\d{0,6}$/.test(value)) {
+      if (field === 'pin') {
+        setPin(value);
+      } else {
+        setConfirmPin(value);
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,11 +32,11 @@ export default function ImportWallet() {
 
     try {
       await importWallet({
-        type: method,
-        seedPhrase: method === 'seed' ? seedPhrase : undefined,
-        privateKey: method === 'private-key' ? privateKey : undefined,
-        password,
-        confirmPassword,
+        type: importType,
+        seedPhrase: importType === 'seed' ? seedPhrase : undefined,
+        privateKey: importType === 'private' ? privateKey : undefined,
+        password: pin,
+        confirmPassword: confirmPin,
       });
       navigate('/');
     } catch (err) {
@@ -41,9 +51,7 @@ export default function ImportWallet() {
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-solana-green">Import Wallet</h1>
-          <p className="mt-2 text-gray-400">
-            Import your existing wallet using seed phrase or private key
-          </p>
+          <p className="mt-2 text-gray-400">Import your existing wallet</p>
         </div>
 
         <div className="card">
@@ -53,30 +61,30 @@ export default function ImportWallet() {
               <div className="flex space-x-4">
                 <button
                   type="button"
+                  onClick={() => setImportType('seed')}
                   className={`flex-1 py-2 px-4 rounded-lg ${
-                    method === 'seed'
+                    importType === 'seed'
                       ? 'bg-solana-green text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-solana-dark text-gray-400'
                   }`}
-                  onClick={() => setMethod('seed')}
                 >
                   Seed Phrase
                 </button>
                 <button
                   type="button"
+                  onClick={() => setImportType('private')}
                   className={`flex-1 py-2 px-4 rounded-lg ${
-                    method === 'private-key'
+                    importType === 'private'
                       ? 'bg-solana-green text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-solana-dark text-gray-400'
                   }`}
-                  onClick={() => setMethod('private-key')}
                 >
                   Private Key
                 </button>
               </div>
             </div>
 
-            {method === 'seed' ? (
+            {importType === 'seed' ? (
               <div>
                 <label htmlFor="seedPhrase" className="block text-sm font-medium mb-2">
                   Seed Phrase
@@ -85,8 +93,8 @@ export default function ImportWallet() {
                   id="seedPhrase"
                   value={seedPhrase}
                   onChange={(e) => setSeedPhrase(e.target.value)}
-                  className="input-primary w-full h-32"
-                  placeholder="Enter your 12 or 24 word seed phrase"
+                  className="input-primary w-full h-24"
+                  placeholder="Enter your 12 or 24-word seed phrase"
                   required
                 />
                 <p className="mt-2 text-sm text-gray-400">
@@ -111,34 +119,41 @@ export default function ImportWallet() {
             )}
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-2">
-                Master Password
+              <label htmlFor="pin" className="block text-sm font-medium mb-2">
+                PIN Code
               </label>
               <input
-                id="password"
+                id="pin"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input-primary w-full"
-                placeholder="Enter your master password"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                value={pin}
+                onChange={(e) => handlePinChange(e, 'pin')}
+                className="input-primary w-full text-center text-2xl tracking-widest"
+                placeholder="••••••"
                 required
-                minLength={8}
               />
+              <p className="mt-2 text-sm text-gray-400">
+                PIN must be exactly 6 digits
+              </p>
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium mb-2">
-                Confirm Password
+              <label htmlFor="confirmPin" className="block text-sm font-medium mb-2">
+                Confirm PIN
               </label>
               <input
-                id="confirmPassword"
+                id="confirmPin"
                 type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="input-primary w-full"
-                placeholder="Confirm your master password"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                value={confirmPin}
+                onChange={(e) => handlePinChange(e, 'confirm')}
+                className="input-primary w-full text-center text-2xl tracking-widest"
+                placeholder="••••••"
                 required
-                minLength={8}
               />
             </div>
 
@@ -149,9 +164,15 @@ export default function ImportWallet() {
             <button
               type="submit"
               className="btn-primary w-full flex justify-center items-center"
-              disabled={isLoading}
+              disabled={isLoading || pin.length !== 6 || confirmPin.length !== 6}
             >
-              {isLoading ? 'Importing...' : 'Import Wallet'}
+              {isLoading ? (
+                <span className="inline-flex items-center">
+                  Loading...
+                </span>
+              ) : (
+                'Import Wallet'
+              )}
             </button>
           </form>
         </div>

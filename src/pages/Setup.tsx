@@ -4,8 +4,8 @@ import { useAuth } from '../hooks/useAuth';
 
 export default function Setup() {
   const [step, setStep] = useState(1);
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [hasConfirmedPhrase, setHasConfirmedPhrase] = useState(false);
@@ -26,13 +26,25 @@ export default function Setup() {
     }
   }, [step]);
 
+  const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'pin' | 'confirm') => {
+    const value = e.target.value;
+    // Only allow numbers and limit to 6 digits
+    if (/^\d{0,6}$/.test(value)) {
+      if (field === 'pin') {
+        setPin(value);
+      } else {
+        setConfirmPin(value);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
     try {
-      await initializeWallet(password, confirmPassword);
+      await initializeWallet(pin, confirmPin);
       setStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create wallet');
@@ -52,7 +64,7 @@ export default function Setup() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-solana-green">Welcome to Solana Wallet</h1>
           <p className="mt-2 text-gray-400">
-            {step === 1 ? 'Create your master password' : 'Save your recovery phrase'}
+            {step === 1 ? 'Create your 6-digit PIN' : 'Save your recovery phrase'}
           </p>
         </div>
 
@@ -60,37 +72,41 @@ export default function Setup() {
           {step === 1 ? (
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label htmlFor="password" className="block text-sm font-medium mb-2">
-                  Master Password
+                <label htmlFor="pin" className="block text-sm font-medium mb-2">
+                  PIN Code
                 </label>
                 <input
-                  id="password"
+                  id="pin"
                   type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input-primary w-full"
-                  placeholder="Enter your master password"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  value={pin}
+                  onChange={(e) => handlePinChange(e, 'pin')}
+                  className="input-primary w-full text-center text-2xl tracking-widest"
+                  placeholder="••••••"
                   required
-                  minLength={8}
                 />
                 <p className="mt-2 text-sm text-gray-400">
-                  Password must be at least 8 characters long
+                  PIN must be exactly 6 digits
                 </p>
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium mb-2">
-                  Confirm Password
+                <label htmlFor="confirmPin" className="block text-sm font-medium mb-2">
+                  Confirm PIN
                 </label>
                 <input
-                  id="confirmPassword"
+                  id="confirmPin"
                   type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="input-primary w-full"
-                  placeholder="Confirm your master password"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  value={confirmPin}
+                  onChange={(e) => handlePinChange(e, 'confirm')}
+                  className="input-primary w-full text-center text-2xl tracking-widest"
+                  placeholder="••••••"
                   required
-                  minLength={8}
                 />
               </div>
 
@@ -101,7 +117,7 @@ export default function Setup() {
               <button
                 type="submit"
                 className="btn-primary w-full flex justify-center items-center"
-                disabled={isLoading}
+                disabled={isLoading || pin.length !== 6 || confirmPin.length !== 6}
               >
                 {isLoading ? 'Creating...' : 'Create Wallet'}
               </button>

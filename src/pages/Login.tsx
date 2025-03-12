@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 export default function Login() {
-  const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -16,12 +16,20 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      await login(password);
+      await login(pin);
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to login');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Only allow numbers and limit to 6 digits
+    if (/^\d{0,6}$/.test(value)) {
+      setPin(value);
     }
   };
 
@@ -35,22 +43,25 @@ export default function Login() {
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-solana-green">Welcome Back</h1>
-          <p className="mt-2 text-gray-400">Enter your master password to continue</p>
+          <p className="mt-2 text-gray-400">Enter your 6-digit PIN to continue</p>
         </div>
 
         <div className="card">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-2">
-                Master Password
+              <label htmlFor="pin" className="block text-sm font-medium mb-2">
+                PIN Code
               </label>
               <input
-                id="password"
+                id="pin"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input-primary w-full"
-                placeholder="Enter your master password"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                value={pin}
+                onChange={handlePinChange}
+                className="input-primary w-full text-center text-2xl tracking-widest"
+                placeholder="••••••"
                 required
               />
               {error && (
@@ -62,7 +73,7 @@ export default function Login() {
               <button
                 type="submit"
                 className="btn-primary w-full flex justify-center items-center"
-                disabled={isLoading}
+                disabled={isLoading || pin.length !== 6}
               >
                 {isLoading ? (
                   <span className="inline-flex items-center">
