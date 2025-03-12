@@ -1,7 +1,11 @@
+import { useState } from 'react';
 import { useToast } from "@/hooks/useToast"
 import { useSolPrice } from "@/hooks/useSolPrice"
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 interface WalletCardProps {
+  id: string;
   name: string;
   address: string;
   balance?: number;
@@ -11,9 +15,11 @@ interface WalletCardProps {
   onDelete?: () => void;
   onToggleFavorite?: () => void;
   onBackup?: () => void;
+  onRename?: (walletId: string, newName: string) => Promise<void>;
 }
 
 export default function WalletCard({
+  id,
   name,
   address,
   balance,
@@ -22,21 +28,24 @@ export default function WalletCard({
   isFavorite,
   onDelete,
   onToggleFavorite,
-  onBackup
+  onBackup,
+  onRename
 }: WalletCardProps) {
   const { toast } = useToast();
   const { price: solPrice } = useSolPrice();
   const shortAddress = `${address.slice(0, 4)}...${address.slice(-4)}`;
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newName, setNewName] = useState(name);
 
   const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent wallet selection when clicking delete
+    e.stopPropagation();
     if (onDelete && window.confirm('Are you sure you want to delete this wallet? This action cannot be undone.')) {
       onDelete();
     }
   };
 
   const handleToggleFavorite = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent wallet selection when clicking favorite
+    e.stopPropagation();
     if (onToggleFavorite) {
       onToggleFavorite();
     }
@@ -70,13 +79,80 @@ export default function WalletCard({
     }
   };
 
+  const handleStartRename = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsRenaming(true);
+  };
+
+  const handleRename = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onRename && newName.trim() && newName !== name) {
+      try {
+        await onRename(id, newName.trim());
+        toast({
+          title: "Wallet renamed",
+          description: "Wallet has been successfully renamed",
+        });
+      } catch (err) {
+        console.error('Failed to rename wallet:', err);
+        toast({
+          title: "Error",
+          description: "Failed to rename wallet",
+          variant: "destructive",
+        });
+      }
+    }
+    setIsRenaming(false);
+  };
+
+  const handleRenameCancel = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setNewName(name);
+    setIsRenaming(false);
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      handleRename(e as unknown as React.MouseEvent);
+    } else if (e.key === 'Escape') {
+      handleRenameCancel(e as unknown as React.MouseEvent);
+    }
+  };
+
   if (isCompact) {
     return (
       <div className={`bg-white dark:bg-gray-800 rounded-lg p-4 shadow-md ${isActive ? 'ring-2 ring-primary' : ''}`}>
         <div className="flex justify-between items-center">
           <div className="truncate">
             <div className="flex items-center space-x-1">
-              <h3 className="text-sm font-medium truncate">{name}</h3>
+              {isRenaming ? (
+                <div className="flex items-center space-x-1" onClick={e => e.stopPropagation()}>
+                  <Input
+                    value={newName}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value)}
+                    onKeyDown={handleRenameKeyDown}
+                    className="h-6 w-32 text-xs py-0 px-2"
+                    autoFocus
+                    placeholder="Enter wallet name"
+                  />
+                  <Button size="sm" variant="ghost" onClick={handleRename} className="h-6 px-1 text-green-500 hover:text-green-600">✓</Button>
+                  <Button size="sm" variant="ghost" onClick={handleRenameCancel} className="h-6 px-1 text-red-500 hover:text-red-600">✕</Button>
+                </div>
+              ) : (
+                <>
+                  <h3 className="text-sm font-medium truncate">{name}</h3>
+                  <button
+                    onClick={handleStartRename}
+                    className="text-gray-400 hover:text-gray-500"
+                    title="Rename wallet"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                  </button>
+                </>
+              )}
               {isFavorite && (
                 <button
                   onClick={handleToggleFavorite}
@@ -130,7 +206,33 @@ export default function WalletCard({
       <div className="flex justify-between items-start mb-4">
         <div>
           <div className="flex items-center space-x-2">
-            <h3 className="text-lg font-semibold">{name}</h3>
+            {isRenaming ? (
+              <div className="flex items-center space-x-1" onClick={e => e.stopPropagation()}>
+                <Input
+                  value={newName}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value)}
+                  onKeyDown={handleRenameKeyDown}
+                  className="h-8 w-48 text-sm"
+                  autoFocus
+                  placeholder="Enter wallet name"
+                />
+                <Button size="sm" variant="ghost" onClick={handleRename} className="h-8 px-2 text-green-500 hover:text-green-600">✓</Button>
+                <Button size="sm" variant="ghost" onClick={handleRenameCancel} className="h-8 px-2 text-red-500 hover:text-red-600">✕</Button>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold">{name}</h3>
+                <button
+                  onClick={handleStartRename}
+                  className="text-gray-400 hover:text-gray-500"
+                  title="Rename wallet"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                  </svg>
+                </button>
+              </>
+            )}
             <button
               onClick={handleToggleFavorite}
               className={`${isFavorite ? 'text-yellow-400 hover:text-yellow-500' : 'text-gray-400 hover:text-gray-500'}`}

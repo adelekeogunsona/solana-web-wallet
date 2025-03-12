@@ -33,7 +33,7 @@ export default function WalletGrid({
     return saved ? JSON.parse(saved) : false;
   });
   const [activeTab, setActiveTab] = useState('all');
-  const { toggleFavorite } = useContext(AuthContext);
+  const { toggleFavorite, renameWallet } = useContext(AuthContext);
 
   useEffect(() => {
     localStorage.setItem('wallet_view_compact', JSON.stringify(isCompactView));
@@ -53,6 +53,14 @@ export default function WalletGrid({
     }
   };
 
+  const handleRename = async (walletId: string, newName: string) => {
+    try {
+      await renameWallet(walletId, newName);
+    } catch (error) {
+      console.error('Failed to rename wallet:', error);
+    }
+  };
+
   const renderWalletGrid = (walletsToRender: Wallet[]) => (
     <div className={`grid gap-4 ${isCompactView ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
       {walletsToRender.map(wallet => (
@@ -62,6 +70,7 @@ export default function WalletGrid({
           className="cursor-pointer"
         >
           <WalletCard
+            id={wallet.id}
             name={wallet.name}
             address={wallet.address}
             balance={wallet.balance}
@@ -71,6 +80,7 @@ export default function WalletGrid({
             onDelete={() => onWalletDelete(wallet.id)}
             onToggleFavorite={() => handleToggleFavorite(wallet.id)}
             onBackup={() => onWalletBackup(wallet.id)}
+            onRename={handleRename}
           />
         </div>
       ))}

@@ -35,6 +35,7 @@ export interface AuthContextType {
   changePin: (currentPin: string, newPin: string) => Promise<void>;
   toggleFavorite: (walletId: string) => Promise<void>;
   getWalletBackupData: (walletId: string) => Promise<{ data: string; isPrivateKey: boolean }>;
+  renameWallet: (walletId: string, newName: string) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -53,4 +54,5 @@ export const AuthContext = createContext<AuthContextType>({
   changePin: async () => {},
   toggleFavorite: async () => {},
   getWalletBackupData: async () => ({ data: '', isPrivateKey: false }),
+  renameWallet: async () => {},
 });

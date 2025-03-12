@@ -370,6 +370,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   };
 
+  const renameWallet = async (walletId: string, newName: string) => {
+    try {
+      const sessionPin = localStorage.getItem('session_pin');
+      if (!sessionPin) {
+        throw new Error('No active session found. Please log in again.');
+      }
+
+      const updatedWallets = wallets.map(wallet => {
+        if (wallet.id === walletId) {
+          return { ...wallet, name: newName };
+        }
+        return wallet;
+      });
+
+      const encryptedData = await encryptWalletData(JSON.stringify(updatedWallets), sessionPin);
+      storeWalletData(encryptedData);
+
+      setWallets(updatedWallets);
+      if (currentWallet?.id === walletId) {
+        setCurrentWallet({ ...currentWallet, name: newName });
+      }
+
+      updateSessionTimestamp(updatedWallets);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to rename wallet: ' + error);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -387,7 +418,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         switchWallet,
         toggleFavorite,
         changePin,
-        getWalletBackupData
+        getWalletBackupData,
+        renameWallet
       }}
     >
       {children}
