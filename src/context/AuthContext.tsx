@@ -1,4 +1,4 @@
-import { useState, ReactNode } from 'react';
+import { useState, ReactNode, useEffect } from 'react';
 import { AuthContext, ImportWalletParams, WalletData } from './authContextTypes';
 import {
   generateNewWallet,
@@ -12,6 +12,8 @@ import {
 } from '../utils/wallet';
 import { Keypair } from '@solana/web3.js';
 
+const SESSION_TIMEOUT = 10 * 60 * 1000; // 10 minutes in milliseconds
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isInitialized, setIsInitialized] = useState(
@@ -19,7 +21,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [currentWallet, setCurrentWallet] = useState<WalletData | null>(null);
 
-  console.log('currentWallet', currentWallet);
+  // Check session validity on component mount and after any authentication state change
+  useEffect(() => {
+    const checkSession = () => {
+      const sessionTimestamp = localStorage.getItem('session_timestamp');
+      const encryptedWallet = localStorage.getItem('encrypted_wallet');
+
+      if (sessionTimestamp && encryptedWallet) {
+        const now = Date.now();
+        const lastActivity = parseInt(sessionTimestamp, 10);
+
+        if (now - lastActivity < SESSION_TIMEOUT) {
+          // Session is still valid
+          const walletData: WalletData = JSON.parse(encryptedWallet);
+          setCurrentWallet(walletData);
+          setIsAuthenticated(true);
+          // Update the timestamp
+          localStorage.setItem('session_timestamp', now.toString());
+        } else {
+          // Session has expired
+          handleSessionExpiry();
+        }
+      }
+    };
+
+    checkSession();
+
+    // Set up interval to check session every minute
+    const intervalId = setInterval(checkSession, 60000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const handleSessionExpiry = () => {
+    localStorage.removeItem('session_timestamp');
+    localStorage.removeItem('encrypted_wallet');
+    setIsAuthenticated(false);
+    setCurrentWallet(null);
+  };
+
+  const updateSessionTimestamp = (wallet: WalletData) => {
+    localStorage.setItem('session_timestamp', Date.now().toString());
+    localStorage.setItem('encrypted_wallet', JSON.stringify(wallet));
+  };
 
   const login = async (pin: string) => {
     try {
@@ -36,19 +80,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const walletData: WalletData = JSON.parse(decryptedData);
       setCurrentWallet(walletData);
       setIsAuthenticated(true);
+      updateSessionTimestamp(walletData);
     } catch (error) {
       throw new Error('Invalid PIN or corrupted wallet data: ' + error);
     }
   };
 
   const logout = () => {
-    setIsAuthenticated(false);
-    setCurrentWallet(null);
+    handleSessionExpiry();
   };
 
   const resetWallet = () => {
     localStorage.removeItem('wallet_initialized');
     localStorage.removeItem('wallet_data');
+    localStorage.removeItem('session_timestamp');
+    localStorage.removeItem('encrypted_wallet');
     setIsInitialized(false);
     setIsAuthenticated(false);
     setCurrentWallet(null);
@@ -80,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCurrentWallet(walletData);
       setIsInitialized(true);
       setIsAuthenticated(true);
+      updateSessionTimestamp(walletData);
     } catch (error) {
       throw new Error('Failed to create wallet: ' + error);
     }
@@ -127,6 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCurrentWallet(walletData);
       setIsInitialized(true);
       setIsAuthenticated(true);
+      updateSessionTimestamp(walletData);
     } catch (error) {
       if (error instanceof Error) {
         throw error;
