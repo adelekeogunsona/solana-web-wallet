@@ -91,6 +91,7 @@ export default function Settings() {
                 value={settings.autoLogoutDuration}
                 onChange={(e) => setAutoLogoutDuration(Number(e.target.value))}
               >
+                <option value={30000}>30 seconds</option>
                 <option value={300000}>5 minutes</option>
                 <option value={900000}>15 minutes</option>
                 <option value={1800000}>30 minutes</option>

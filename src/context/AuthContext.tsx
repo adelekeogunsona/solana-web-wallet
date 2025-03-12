@@ -48,8 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           setIsAuthenticated(true);
           setCurrentPin(sessionPin); // Restore the PIN from session
-          // Update the timestamp
-          localStorage.setItem('session_timestamp', now.toString());
         } else {
           // Session has expired
           handleSessionExpiry();
@@ -59,11 +57,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     checkSession();
 
-    // Set up interval to check session every minute
-    const intervalId = setInterval(checkSession, 60000);
+    // Set up interval to check session more frequently (every 5 seconds)
+    const intervalId = setInterval(checkSession, 5000);
 
-    return () => clearInterval(intervalId);
-  }, [currentWallet, settings.autoLogoutDuration]);
+    // Add user activity listeners
+    const updateActivity = () => {
+      if (isAuthenticated) {
+        localStorage.setItem('session_timestamp', Date.now().toString());
+      }
+    };
+
+    // Update timestamp on user activity
+    window.addEventListener('mousemove', updateActivity);
+    window.addEventListener('keydown', updateActivity);
+    window.addEventListener('click', updateActivity);
+    window.addEventListener('scroll', updateActivity);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('mousemove', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
+      window.removeEventListener('click', updateActivity);
+      window.removeEventListener('scroll', updateActivity);
+    };
+  }, [currentWallet, settings.autoLogoutDuration, isAuthenticated]);
 
   const handleSessionExpiry = () => {
     localStorage.removeItem('session_timestamp');
