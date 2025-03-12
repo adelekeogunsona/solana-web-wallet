@@ -2,18 +2,12 @@ import { Link } from 'react-router-dom';
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../context/authContextTypes';
 import { useSettings } from '../hooks/useSettings';
-import TokenCard from '../components/TokenCard';
+import TokenSection from '../components/TokenSection';
 import WalletGrid from '../components/WalletGrid';
 import { rpcManager } from '../utils/rpc';
 import PinInput from '../components/PinInput';
 import { hexToUint8Array } from '../utils/wallet';
 import bs58 from 'bs58';
-
-const DUMMY_TOKENS = [
-  { id: 1, name: 'Serum', symbol: 'SRM', balance: 1000 },
-  { id: 2, name: 'Raydium', symbol: 'RAY', balance: 500 },
-  { id: 3, name: 'Star Atlas', symbol: 'ATLAS', balance: 2500 },
-];
 
 interface SeedPhrasePopupProps {
   seedPhrase: string;
@@ -322,19 +316,7 @@ export default function Home() {
         onWalletBackup={handleBackup}
       />
 
-      <div>
-        <h2 className="text-2xl font-bold mb-6">Tokens</h2>
-        <div className="space-y-4">
-          {DUMMY_TOKENS.map((token) => (
-            <TokenCard
-              key={token.id}
-              name={token.name}
-              symbol={token.symbol}
-              balance={token.balance}
-            />
-          ))}
-        </div>
-      </div>
+      <TokenSection activeWalletAddress={currentWallet?.publicKey} />
     </div>
   );
 }

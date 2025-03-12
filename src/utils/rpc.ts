@@ -1,4 +1,5 @@
-import { Connection, PublicKey, LAMPORTS_PER_SOL, Commitment } from '@solana/web3.js';
+import { Connection, PublicKey, LAMPORTS_PER_SOL, Commitment, GetProgramAccountsFilter } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 const CONNECTION_CONFIG = {
   commitment: 'confirmed' as Commitment,
@@ -53,6 +54,46 @@ interface CachedBalance {
   timestamp: number;
 }
 
+interface TokenMetadata {
+  name: string;
+  symbol: string;
+  decimals: number;
+  icon?: string;
+  verified: boolean;
+}
+
+interface JupiterTokenInfo {
+  address: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  logoURI?: string;
+  tags?: string[];
+}
+
+interface TokenAccount {
+  pubkey: PublicKey;
+  mint: string;
+  amount: number;
+  decimals: number;
+}
+
+interface ParsedTokenAccountData {
+  program: string;
+  parsed: {
+    info: {
+      mint: string;
+      owner: string;
+      tokenAmount: {
+        amount: string;
+        decimals: number;
+        uiAmount: number;
+      };
+    };
+    type: string;
+  };
+}
+
 class RPCManager {
   private endpoints: RPCEndpointStatus[];
   private requestCount: number;
@@ -64,6 +105,9 @@ class RPCManager {
   private lastHealthCheck: number;
   private balanceCache: Map<string, CachedBalance>;
   private pendingBalanceRequests: Map<string, Promise<number>>;
+  private tokenListCache: Map<string, JupiterTokenInfo>;
+  private tokenListLastFetch: number;
+  private tokenListFetchPromise: Promise<void> | null;
 
   constructor(rpcUrls: string[] = [], config: Partial<RPCConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -82,6 +126,9 @@ class RPCManager {
     this.lastHealthCheck = 0;
     this.balanceCache = new Map();
     this.pendingBalanceRequests = new Map();
+    this.tokenListCache = new Map();
+    this.tokenListLastFetch = 0;
+    this.tokenListFetchPromise = null;
     this.startHealthChecks();
     this.startSlotPolling();
   }
@@ -312,6 +359,107 @@ class RPCManager {
     }, this.config.healthCheckInterval);
   }
 
+  async getTokenAccounts(walletAddress: string): Promise<TokenAccount[]> {
+    const callback = async (connection: Connection) => {
+      try {
+        const filters: GetProgramAccountsFilter[] = [
+          {
+            dataSize: 165, // Size of token account
+          },
+          {
+            memcmp: {
+              offset: 32, // Owner offset
+              bytes: walletAddress,
+            },
+          },
+        ];
+
+        const accounts = await connection.getParsedProgramAccounts(
+          TOKEN_PROGRAM_ID,
+          { filters }
+        );
+
+        return accounts.map(account => {
+          const parsedData = account.account.data as ParsedTokenAccountData;
+          const mintAddress = parsedData.parsed.info.mint;
+          const tokenAmount = parsedData.parsed.info.tokenAmount;
+
+          return {
+            pubkey: account.pubkey,
+            mint: mintAddress,
+            amount: tokenAmount.uiAmount,
+            decimals: tokenAmount.decimals,
+          };
+        }).filter(account => account.amount > 0); // Only return accounts with non-zero balance
+      } catch (error) {
+        console.error('Error in getTokenAccounts:', error);
+        throw error;
+      }
+    };
+
+    return this.enqueueRequest(callback);
+  }
+
+  private async fetchTokenList(): Promise<void> {
+    try {
+      const response = await fetch('https://token.jup.ag/strict');
+      const data = await response.json();
+
+      // Clear the old cache
+      this.tokenListCache.clear();
+
+      // Update the cache with new data
+      for (const token of data) {
+        this.tokenListCache.set(token.address, token);
+      }
+
+      this.tokenListLastFetch = Date.now();
+    } catch (error) {
+      console.error('Error fetching token list:', error);
+    } finally {
+      this.tokenListFetchPromise = null;
+    }
+  }
+
+  private async ensureTokenList(): Promise<void> {
+    // If we're already fetching, wait for that to complete
+    if (this.tokenListFetchPromise) {
+      await this.tokenListFetchPromise;
+      return;
+    }
+
+    // If the cache is older than 1 hour or empty, fetch new data
+    if (Date.now() - this.tokenListLastFetch > 3600000 || this.tokenListCache.size === 0) {
+      this.tokenListFetchPromise = this.fetchTokenList();
+      await this.tokenListFetchPromise;
+    }
+  }
+
+  async getTokenMetadata(mintAddress: string): Promise<TokenMetadata> {
+    // Ensure we have the latest token list
+    await this.ensureTokenList();
+
+    // Check Jupiter's token list
+    const jupiterToken = this.tokenListCache.get(mintAddress);
+    if (jupiterToken) {
+      return {
+        name: jupiterToken.name,
+        symbol: jupiterToken.symbol,
+        decimals: jupiterToken.decimals,
+        icon: jupiterToken.logoURI,
+        verified: true,
+      };
+    }
+
+    // For unknown tokens, return minimal information
+    return {
+      name: 'Unknown Token',
+      symbol: mintAddress.slice(0, 4),
+      decimals: 0,
+      verified: false,
+    };
+  }
+
   destroy() {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
@@ -325,10 +473,11 @@ class RPCManager {
     this.isProcessingQueue = false;
     this.balanceCache.clear();
     this.pendingBalanceRequests.clear();
+    this.tokenListCache.clear();
   }
 }
 
 const rpcManager = new RPCManager();
 
 export { rpcManager, RPCManager };
-export type { RPCConfig };
+export type { RPCConfig, TokenAccount };

@@ -188,7 +188,8 @@ export default function WalletCard({
           </p>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-4">
+
+      <div className="mt-auto grid grid-cols-2 gap-4">
         <button
           onClick={handleViewTransactions}
           className="flex items-center justify-center space-x-2 p-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700 rounded-lg transition-colors"
