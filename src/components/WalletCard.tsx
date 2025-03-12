@@ -1,4 +1,5 @@
 import { useToast } from "@/hooks/useToast"
+import { useSolPrice } from "@/hooks/useSolPrice"
 
 interface WalletCardProps {
   name: string;
@@ -24,6 +25,7 @@ export default function WalletCard({
   onBackup
 }: WalletCardProps) {
   const { toast } = useToast();
+  const { price: solPrice } = useSolPrice();
   const shortAddress = `${address.slice(0, 4)}...${address.slice(-4)}`;
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -104,9 +106,20 @@ export default function WalletCard({
               </button>
             </div>
           </div>
-          <p className="text-sm font-semibold ml-2">
-            {balance !== undefined ? `${balance.toFixed(2)} SOL` : '...'}
-          </p>
+          <div className="text-right">
+            <p className="text-sm font-medium">
+              {balance !== undefined ? (
+                <>
+                  {balance.toFixed(2)} SOL
+                  {solPrice && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      ${(balance * solPrice).toFixed(2)}
+                    </p>
+                  )}
+                </>
+              ) : '...'}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -166,9 +179,14 @@ export default function WalletCard({
       </div>
       <div>
         <p className="text-sm text-gray-500 dark:text-gray-400">Balance</p>
-        <p className="text-2xl font-bold mb-6">
+        <p className="text-lg font-bold mb-1">
           {balance !== undefined ? `${balance.toFixed(2)} SOL` : '...'}
         </p>
+        {balance !== undefined && solPrice && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+            ${(balance * solPrice).toFixed(2)} USD
+          </p>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-4">
         <button
