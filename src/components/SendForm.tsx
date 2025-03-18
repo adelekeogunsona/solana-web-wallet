@@ -27,17 +27,96 @@ export default function SendForm({ walletId }: SendFormProps) {
   const [recipientError, setRecipientError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
   const [isNewAccount, setIsNewAccount] = useState<boolean>(false);
+  const [isAddressValid, setIsAddressValid] = useState(false);
 
   const wallet = wallets?.find(w => w.id === walletId);
 
-  const validateRecipientAddress = (address: string): boolean => {
+  // Fetch balance when wallet changes
+  useEffect(() => {
+    if (wallet) {
+      rpcManager.getBalance(wallet.publicKey)
+        .then(setBalance)
+        .catch(error => {
+          console.error('Failed to fetch balance:', error);
+          toast({
+            title: "Error",
+            description: "Failed to fetch wallet balance",
+            variant: "destructive",
+          });
+        });
+    }
+  }, [wallet, toast]);
+
+  const validateRecipientAddress = async (address: string): Promise<boolean> => {
+    // Clear amount when address changes
+    setAmount('');
+    setAmountError(null);
+
     try {
+      // Validate address format
       new PublicKey(address);
       setRecipientError(null);
-      return true;
+
+      // Check if recipient account exists
+      try {
+        const recipientBalance = await rpcManager.getBalance(address);
+        const newIsNewAccount = recipientBalance === 0;
+        setIsNewAccount(newIsNewAccount);
+
+        // After validating address, update fee estimation
+        await updateFeeEstimation(newIsNewAccount);
+
+        setIsAddressValid(true);
+        return true;
+      } catch (error) {
+        console.error('Failed to check recipient account:', error);
+        setIsAddressValid(false);
+        setRecipientError('Failed to verify recipient account');
+        return false;
+      }
     } catch {
       setRecipientError('Invalid Solana address');
+      setIsAddressValid(false);
       return false;
+    }
+  };
+
+  const updateFeeEstimation = async (isNew: boolean): Promise<void> => {
+    if (!wallet) return;
+
+    try {
+      // Create a dummy transaction to estimate fees
+      const recentBlockhash = await rpcManager.getRecentBlockhash();
+      const transaction = new Transaction({ recentBlockhash });
+
+      // Add transfer instruction
+      transaction.add(
+        SystemProgram.transfer({
+          fromPubkey: new PublicKey(wallet.publicKey),
+          toPubkey: new PublicKey(wallet.publicKey),
+          lamports: LAMPORTS_PER_SOL / 100,
+        })
+      );
+
+      // If it's a new account, add second transfer instruction
+      if (isNew) {
+        transaction.add(
+          SystemProgram.transfer({
+            fromPubkey: new PublicKey(wallet.publicKey),
+            toPubkey: new PublicKey(wallet.publicKey),
+            lamports: RENT_EXEMPT_MINIMUM,
+          })
+        );
+      }
+
+      const fee = await rpcManager.getFeeForMessage(transaction.compileMessage());
+      if (fee !== null) {
+        setEstimatedFee((fee * SAFETY_MARGIN) / LAMPORTS_PER_SOL);
+      }
+    } catch (error) {
+      console.error('Failed to estimate fee:', error);
+      // Fallback to default fee estimate
+      setEstimatedFee((LAMPORTS_PER_SIGNATURE * SAFETY_MARGIN * (isNew ? 2 : 1)) / LAMPORTS_PER_SOL);
     }
   };
 
@@ -62,95 +141,6 @@ export default function SendForm({ walletId }: SendFormProps) {
     return true;
   }, [balance, estimatedFee, isNewAccount]);
 
-  // Check if recipient account exists when address changes
-  useEffect(() => {
-    const checkRecipientAccount = async () => {
-      if (!validateRecipientAddress(address)) return;
-
-      try {
-        const recipientBalance = await rpcManager.getBalance(address);
-        const newIsNewAccount = recipientBalance === 0;
-        setIsNewAccount(newIsNewAccount);
-
-        // Re-validate amount when recipient status changes
-        if (amount) {
-          validateAmount(amount);
-        }
-      } catch (error) {
-        console.error('Failed to check recipient account:', error);
-      }
-    };
-
-    if (address) {
-      checkRecipientAccount();
-    }
-  }, [address, amount, balance, estimatedFee, isNewAccount, validateAmount]);
-
-  // Estimate transaction fee function
-  const estimateTransactionFee = useCallback(async () => {
-    if (!wallet) return;
-
-    try {
-      // Create a dummy transaction to estimate fees
-      const recentBlockhash = await rpcManager.getRecentBlockhash();
-      const transaction = new Transaction({ recentBlockhash });
-
-      // Add transfer instruction
-      transaction.add(
-        SystemProgram.transfer({
-          fromPubkey: new PublicKey(wallet.publicKey),
-          toPubkey: new PublicKey(wallet.publicKey),
-          lamports: LAMPORTS_PER_SOL / 100,
-        })
-      );
-
-      // If it's a new account, add second transfer instruction to simulate rent-exempt transfer
-      if (isNewAccount) {
-        transaction.add(
-          SystemProgram.transfer({
-            fromPubkey: new PublicKey(wallet.publicKey),
-            toPubkey: new PublicKey(wallet.publicKey),
-            lamports: RENT_EXEMPT_MINIMUM,
-          })
-        );
-      }
-
-      const fee = await rpcManager.getFeeForMessage(transaction.compileMessage());
-      if (fee !== null) {
-        setEstimatedFee((fee * SAFETY_MARGIN) / LAMPORTS_PER_SOL);
-      }
-    } catch (error) {
-      console.error('Failed to estimate fee:', error);
-      // Fallback to default fee estimate (double for new accounts)
-      setEstimatedFee((LAMPORTS_PER_SIGNATURE * SAFETY_MARGIN * (isNewAccount ? 2 : 1)) / LAMPORTS_PER_SOL);
-    }
-  }, [wallet, isNewAccount]);
-
-  // Fetch balance and estimate fee when wallet changes
-  useEffect(() => {
-    if (wallet) {
-      rpcManager.getBalance(wallet.publicKey)
-        .then(setBalance)
-        .catch(error => {
-          console.error('Failed to fetch balance:', error);
-          toast({
-            title: "Error",
-            description: "Failed to fetch wallet balance",
-            variant: "destructive",
-          });
-        });
-
-      estimateTransactionFee();
-    }
-  }, [wallet, toast, estimateTransactionFee]);
-
-  // Re-estimate fee when isNewAccount changes
-  useEffect(() => {
-    if (wallet) {
-      estimateTransactionFee();
-    }
-  }, [wallet, isNewAccount, estimateTransactionFee]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!wallet) {
@@ -163,10 +153,13 @@ export default function SendForm({ walletId }: SendFormProps) {
     }
 
     // Validate inputs
-    const isValidAddress = validateRecipientAddress(address);
-    const isValidAmount = validateAmount(amount);
+    if (!isAddressValid) {
+      setRecipientError('Please enter a valid recipient address');
+      return;
+    }
 
-    if (!isValidAddress || !isValidAmount) {
+    const isValidAmount = validateAmount(amount);
+    if (!isValidAmount) {
       return;
     }
 
@@ -174,8 +167,28 @@ export default function SendForm({ walletId }: SendFormProps) {
     setShowConfirmation(true);
   };
 
+  const handleSetMaxAmount = () => {
+    if (!isAddressValid || balance === undefined || balance <= estimatedFee) return;
+
+    const rentExemptCost = isNewAccount ? RENT_EXEMPT_MINIMUM / LAMPORTS_PER_SOL : 0;
+
+    // Leave a small buffer (0.001 SOL) to ensure transaction doesn't fail
+    const safetyBuffer = 0.001;
+    const maxAmount = balance - estimatedFee - rentExemptCost - safetyBuffer;
+
+    if (maxAmount <= 0) {
+      setAmountError('Insufficient balance for fees and rent-exempt minimum');
+      return;
+    }
+
+    // Round down to 6 decimal places to avoid floating-point precision issues
+    const roundedMaxAmount = Math.floor(maxAmount * 1000000) / 1000000;
+    setAmount(roundedMaxAmount.toFixed(6));
+    validateAmount(roundedMaxAmount.toString());
+  };
+
   const handleConfirmSend = async () => {
-    if (!wallet) return;
+    if (!wallet || !isAddressValid) return;
 
     setIsLoading(true);
     try {
@@ -183,24 +196,19 @@ export default function SendForm({ walletId }: SendFormProps) {
       const recentBlockhash = await rpcManager.getRecentBlockhash();
 
       // Create transaction
-      const transaction = new Transaction({ recentBlockhash }).add(
+      const transaction = new Transaction({ recentBlockhash });
+
+      // Calculate exact amount in lamports (round down to ensure no overflow)
+      const amountLamports = Math.floor(parseFloat(amount) * LAMPORTS_PER_SOL);
+
+      // For all accounts, just use transfer
+      transaction.add(
         SystemProgram.transfer({
           fromPubkey: new PublicKey(wallet.publicKey),
           toPubkey: new PublicKey(address),
-          lamports: Math.floor(parseFloat(amount) * LAMPORTS_PER_SOL),
+          lamports: amountLamports + (isNewAccount ? RENT_EXEMPT_MINIMUM : 0),
         })
       );
-
-      // If it's a new account, add another instruction for rent-exempt minimum
-      if (isNewAccount) {
-        transaction.add(
-          SystemProgram.transfer({
-            fromPubkey: new PublicKey(wallet.publicKey),
-            toPubkey: new PublicKey(address),
-            lamports: RENT_EXEMPT_MINIMUM,
-          })
-        );
-      }
 
       // Get keypair from private key
       const keypair = getKeypairFromPrivateKey(wallet.privateKey);
@@ -209,21 +217,17 @@ export default function SendForm({ walletId }: SendFormProps) {
       transaction.sign(keypair);
       const signature = await rpcManager.sendTransaction(transaction);
 
-      // Wait for confirmation
-      try {
-        await rpcManager.confirmTransaction(signature);
-        toast({
-          title: "Success",
-          description: `Transaction sent successfully. Signature: ${signature.slice(0, 8)}...`,
-        });
-        navigate('/');
-      } catch (error) {
-        console.error('Transaction confirmation failed:', error);
-        toast({
-          title: "Warning",
-          description: "Transaction sent but confirmation failed. Please check the transaction status.",
-        });
-      }
+      // Show success toast
+      toast({
+        title: "Success",
+        description: `Transaction sent successfully.`,
+      });
+
+      // Open explorer in new tab
+      window.open(`https://solana.fm/tx/${signature}?cluster=mainnet-beta`, '_blank');
+
+      // Navigate back to dashboard
+      navigate('/');
     } catch (error) {
       console.error('Transaction failed:', error);
       toast({
@@ -235,18 +239,6 @@ export default function SendForm({ walletId }: SendFormProps) {
       setIsLoading(false);
       setShowConfirmation(false);
     }
-  };
-
-  const handleSetMaxAmount = () => {
-    if (balance === undefined || balance <= estimatedFee) return;
-    const rentExemptCost = isNewAccount ? RENT_EXEMPT_MINIMUM / LAMPORTS_PER_SOL : 0;
-    const maxAmount = balance - estimatedFee - rentExemptCost;
-    if (maxAmount <= 0) {
-      setAmountError('Insufficient balance for fees and rent-exempt minimum');
-      return;
-    }
-    setAmount(maxAmount.toFixed(9));
-    validateAmount(maxAmount.toString());
   };
 
   if (!wallet) {
@@ -272,6 +264,30 @@ export default function SendForm({ walletId }: SendFormProps) {
           </div>
 
           <div>
+            <label className="block text-sm font-medium mb-2">Recipient Address</label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => {
+                setAddress(e.target.value);
+                setIsAddressValid(false); // Reset validity on change
+              }}
+              onBlur={() => address && validateRecipientAddress(address)}
+              className={`input-primary w-full ${recipientError ? 'border-red-500' : ''}`}
+              placeholder="Enter Solana address"
+              required
+            />
+            {recipientError && (
+              <p className="mt-1 text-sm text-red-500">{recipientError}</p>
+            )}
+            {isAddressValid && (
+              <p className="mt-1 text-sm text-green-500">
+                {isNewAccount ? 'New account - rent exempt minimum will be added' : 'Valid address'}
+              </p>
+            )}
+          </div>
+
+          <div>
             <label className="block text-sm font-medium mb-2">Amount</label>
             <div className="relative">
               <input
@@ -285,12 +301,13 @@ export default function SendForm({ walletId }: SendFormProps) {
                 placeholder="0.00"
                 step="any"
                 required
+                disabled={!isAddressValid}
               />
               <button
                 type="button"
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-solana-green hover:opacity-80"
                 onClick={handleSetMaxAmount}
-                disabled={balance === undefined || balance <= estimatedFee}
+                disabled={!isAddressValid || balance === undefined || balance <= estimatedFee}
               >
                 MAX
               </button>
@@ -301,32 +318,20 @@ export default function SendForm({ walletId }: SendFormProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Recipient Address</label>
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => {
-                setAddress(e.target.value);
-                validateRecipientAddress(e.target.value);
-              }}
-              className={`input-primary w-full ${recipientError ? 'border-red-500' : ''}`}
-              placeholder="Enter Solana address"
-              required
-            />
-            {recipientError && (
-              <p className="mt-1 text-sm text-red-500">{recipientError}</p>
-            )}
-          </div>
-
-          <div>
             <div className="flex justify-between text-sm mb-4">
               <span className="text-gray-400">Network Fee</span>
               <span>~{estimatedFee.toFixed(6)} SOL</span>
             </div>
+            {isNewAccount && (
+              <div className="flex justify-between text-sm mb-4">
+                <span className="text-gray-400">Rent-exempt Minimum</span>
+                <span>{(RENT_EXEMPT_MINIMUM / LAMPORTS_PER_SOL).toFixed(6)} SOL</span>
+              </div>
+            )}
             <button
               type="submit"
               className="btn-primary w-full"
-              disabled={isLoading || balance === undefined || !!recipientError || !!amountError}
+              disabled={isLoading || balance === undefined || !isAddressValid || !!amountError || amount === ''}
             >
               {isLoading ? 'Sending...' : 'Send'}
             </button>
