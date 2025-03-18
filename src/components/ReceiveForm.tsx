@@ -1,16 +1,50 @@
-const DUMMY_ADDRESS = '7x8x9x0x1x2x3x4x5x6x7x8x9x0x1x2x';
+import { useContext } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
+import { AuthContext } from '../context/authContextTypes';
+import { useToast } from '@/hooks/useToast';
 
 export default function ReceiveForm() {
+  const { currentWallet } = useContext(AuthContext);
+  const { toast } = useToast();
+
+  if (!currentWallet) {
+    return (
+      <div className="card">
+        <h2 className="text-xl font-bold mb-6">Receive</h2>
+        <p className="text-red-500">No wallet selected</p>
+      </div>
+    );
+  }
+
+  const handleCopyAddress = async () => {
+    try {
+      await navigator.clipboard.writeText(currentWallet.publicKey);
+      toast({
+        title: "Success",
+        description: "Address copied to clipboard",
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to copy address",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="card">
       <h2 className="text-xl font-bold mb-6">Receive</h2>
 
       <div className="space-y-6">
-        <div className="bg-white p-8 rounded-lg mx-auto w-fit">
-          {/* Placeholder for QR code */}
-          <div className="w-48 h-48 bg-gray-200 rounded-lg flex items-center justify-center text-gray-400">
-            QR Code
-          </div>
+        <div className="bg-white dark:bg-gray-800 p-8 rounded-lg mx-auto w-fit">
+          <QRCodeSVG
+            value={currentWallet.publicKey}
+            size={192}
+            level="H"
+            includeMargin
+            className="rounded-lg"
+          />
         </div>
 
         <div>
@@ -18,12 +52,12 @@ export default function ReceiveForm() {
           <div className="relative">
             <input
               type="text"
-              value={DUMMY_ADDRESS}
+              value={currentWallet.publicKey}
               readOnly
               className="input-primary w-full pr-24"
             />
             <button
-              onClick={() => navigator.clipboard.writeText(DUMMY_ADDRESS)}
+              onClick={handleCopyAddress}
               className="absolute right-2 top-1/2 -translate-y-1/2 btn-secondary py-1 px-3"
             >
               Copy
