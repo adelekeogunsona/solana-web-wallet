@@ -1,8 +1,15 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import SendForm from '../components/SendForm';
 import ReceiveForm from '../components/ReceiveForm';
 
+interface LocationState {
+  walletId?: string;
+}
+
 export default function Transfer() {
+  const location = useLocation();
+  const { walletId } = (location.state as LocationState) || {};
   const [activeTab, setActiveTab] = useState<'send' | 'receive'>('send');
 
   return (
@@ -35,7 +42,7 @@ export default function Transfer() {
       </div>
 
       <div className="max-w-2xl mx-auto">
-        {activeTab === 'send' ? <SendForm /> : <ReceiveForm />}
+        {activeTab === 'send' ? <SendForm walletId={walletId} /> : <ReceiveForm />}
       </div>
     </div>
   );

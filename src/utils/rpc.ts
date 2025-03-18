@@ -1,4 +1,4 @@
-import { Connection, PublicKey, LAMPORTS_PER_SOL, Commitment, GetProgramAccountsFilter } from '@solana/web3.js';
+import { Connection, PublicKey, LAMPORTS_PER_SOL, Commitment, GetProgramAccountsFilter, Transaction, Message } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 const CONNECTION_CONFIG = {
@@ -458,6 +458,66 @@ class RPCManager {
       decimals: 0,
       verified: false,
     };
+  }
+
+  async getRecentBlockhash(): Promise<string> {
+    const callback = async (connection: Connection) => {
+      try {
+        const { blockhash } = await connection.getLatestBlockhash(CONNECTION_CONFIG.commitment);
+        return blockhash;
+      } catch (error) {
+        console.error('Error in getRecentBlockhash:', error);
+        throw error;
+      }
+    };
+
+    return this.enqueueRequest(callback);
+  }
+
+  async getFeeForMessage(message: Message): Promise<number> {
+    const callback = async (connection: Connection) => {
+      try {
+        const response = await connection.getFeeForMessage(message, CONNECTION_CONFIG.commitment);
+        if (response.value === null) {
+          throw new Error('Failed to get fee for message');
+        }
+        return response.value;
+      } catch (error) {
+        console.error('Error in getFeeForMessage:', error);
+        throw error;
+      }
+    };
+
+    return this.enqueueRequest(callback);
+  }
+
+  async sendTransaction(transaction: Transaction): Promise<string> {
+    const healthyEndpoint = this.endpoints.find(e => e.isHealthy);
+    if (!healthyEndpoint) {
+      throw new Error('No healthy RPC endpoints available');
+    }
+
+    try {
+      const signature = await healthyEndpoint.connection.sendRawTransaction(transaction.serialize());
+      return signature;
+    } catch (error) {
+      console.error('Failed to send transaction:', error);
+      throw error;
+    }
+  }
+
+  async confirmTransaction(signature: string): Promise<void> {
+    const healthyEndpoint = this.endpoints.find(e => e.isHealthy);
+    if (!healthyEndpoint) {
+      throw new Error('No healthy RPC endpoints available');
+    }
+
+    try {
+      await healthyEndpoint.connection.confirmTransaction(signature, 'confirmed');
+    } catch (error) {
+      console.error('Failed to confirm transaction:', error);
+      throw error;
+    }
   }
 
   destroy() {

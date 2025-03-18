@@ -3,6 +3,7 @@ import { useToast } from "@/hooks/useToast"
 import { useSolPrice } from "@/hooks/useSolPrice"
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 interface WalletCardProps {
   id: string;
@@ -33,6 +34,7 @@ export default function WalletCard({
 }: WalletCardProps) {
   const { toast } = useToast();
   const { price: solPrice } = useSolPrice();
+  const navigate = useNavigate();
   const shortAddress = `${address.slice(0, 4)}...${address.slice(-4)}`;
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState(name);
@@ -118,6 +120,11 @@ export default function WalletCard({
     } else if (e.key === 'Escape') {
       handleRenameCancel(e as unknown as React.MouseEvent);
     }
+  };
+
+  const handleSend = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigate('/transfer', { state: { walletId: id } });
   };
 
   if (isCompact) {
@@ -291,25 +298,34 @@ export default function WalletCard({
         )}
       </div>
 
-      <div className="mt-auto grid grid-cols-2 gap-4">
+      <div className="mt-auto grid grid-cols-3 gap-2">
+        <button
+          onClick={handleSend}
+          className="flex items-center justify-center space-x-2 p-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700 rounded-lg transition-colors"
+          title="Send SOL"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+          </svg>
+        </button>
         <button
           onClick={handleViewTransactions}
           className="flex items-center justify-center space-x-2 p-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700 rounded-lg transition-colors"
+          title="View Transaction History"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clipRule="evenodd" />
           </svg>
-          <span>Transaction History</span>
         </button>
         <button
           onClick={handleBackup}
           className="flex items-center justify-center space-x-2 p-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 bg-gray-100 dark:bg-gray-700 rounded-lg transition-colors"
+          title="Backup Wallet"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
             <path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2h-1.528A6 6 0 004 9.528V4z" />
             <path fillRule="evenodd" d="M8 10a4 4 0 00-3.446 6.032l-1.261 1.26a1 1 0 101.414 1.415l1.261-1.261A4 4 0 108 10zm-2 4a2 2 0 114 0 2 2 0 01-4 0z" clipRule="evenodd" />
           </svg>
-          <span>Backup Wallet</span>
         </button>
       </div>
     </div>
