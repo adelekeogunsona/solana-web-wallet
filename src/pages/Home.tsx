@@ -316,7 +316,10 @@ export default function Home() {
         onWalletBackup={handleBackup}
       />
 
-      <TokenSection activeWalletAddress={currentWallet?.publicKey} />
+      <TokenSection
+        activeWalletAddress={currentWallet?.publicKey}
+        walletId={currentWallet?.id}
+      />
     </div>
   );
 }

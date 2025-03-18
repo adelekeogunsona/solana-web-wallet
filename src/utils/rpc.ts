@@ -1,4 +1,4 @@
-import { Connection, PublicKey, LAMPORTS_PER_SOL, Commitment, GetProgramAccountsFilter, Transaction, Message } from '@solana/web3.js';
+import { Connection, PublicKey, LAMPORTS_PER_SOL, Commitment, GetProgramAccountsFilter, Transaction, Message, AccountInfo } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 const CONNECTION_CONFIG = {
@@ -518,6 +518,21 @@ class RPCManager {
       console.error('Failed to confirm transaction:', error);
       throw error;
     }
+  }
+
+  async getAccountInfo(address: string): Promise<AccountInfo<Buffer> | null> {
+    const callback = async (connection: Connection) => {
+      try {
+        const pubkey = new PublicKey(address);
+        const accountInfo = await connection.getAccountInfo(pubkey);
+        return accountInfo;
+      } catch (error) {
+        console.error('Error in getAccountInfo:', error);
+        throw error;
+      }
+    };
+
+    return this.enqueueRequest(callback);
   }
 
   destroy() {
