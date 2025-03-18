@@ -16,7 +16,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="bg-solana-gray border-b border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -45,15 +45,15 @@ export default function MainLayout({ children }: MainLayoutProps) {
       </header>
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         {children}
       </main>
 
       {/* Footer */}
-      <footer className="bg-solana-gray border-t border-gray-700 mt-auto">
+      <footer className="bg-solana-gray border-t border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="text-center text-gray-400">
-            <p>© 2024 Solana Multi-Wallet. All rights reserved.</p>
+            <p>© 2025 Solana Multi-Wallet. All rights reserved.</p>
           </div>
         </div>
       </footer>
