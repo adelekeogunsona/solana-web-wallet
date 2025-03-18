@@ -5,12 +5,14 @@ import { rpcManager } from '../utils/rpc';
 import {
   LAMPORTS_PER_SOL,
   PublicKey,
-  Transaction
+  Transaction,
+  SystemProgram
 } from '@solana/web3.js';
 import {
   createAssociatedTokenAccountInstruction,
   getAssociatedTokenAddress,
-  createTransferInstruction
+  createTransferInstruction,
+  TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
 import { getKeypairFromPrivateKey } from '../utils/wallet';
 import { TokenData } from '@/hooks/useTokens';
@@ -22,11 +24,8 @@ interface TokenSendModalProps {
   onClose: () => void;
 }
 
-const LAMPORTS_PER_SIGNATURE = 5000; // Base fee per signature
-const SAFETY_MARGIN = 2; // Multiply gas fee by this for safety margin
-
-// Minimum lamports needed for a token account (approximate, could vary)
-const TOKEN_ACCOUNT_RENT_EXEMPTION = 2500000;
+// Safety margin for transaction fees to account for potential blockchain congestion
+const SAFETY_MARGIN = 2;
 
 export default function TokenSendModal({
   walletId,
@@ -39,12 +38,16 @@ export default function TokenSendModal({
   const [amount, setAmount] = useState('');
   const [address, setAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [estimatedFee, setEstimatedFee] = useState<number>(LAMPORTS_PER_SIGNATURE / LAMPORTS_PER_SOL);
+  const [estimatedFee, setEstimatedFee] = useState<number>(0.000005); // Initial estimate of 5000 lamports
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [recipientError, setRecipientError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
   const [isAddressValid, setIsAddressValid] = useState(false);
   const [sourceTokenAccount, setSourceTokenAccount] = useState<string | null>(null);
+  const [rentExemption, setRentExemption] = useState<number>(2500000); // Default value, updated dynamically
+  const [needsAccountCreation, setNeedsAccountCreation] = useState<boolean>(false);
+  const [needsWalletFunding, setNeedsWalletFunding] = useState<boolean>(false);
+  const [walletFundingAmount] = useState<number>(890880); // Default minimum SOL for a wallet
 
   const wallet = wallets?.find(w => w.id === walletId);
 
@@ -97,28 +100,23 @@ export default function TokenSendModal({
 
   // Estimate network fee
   useEffect(() => {
-    const estimateFee = async () => {
+    const fetchRentExemption = async () => {
       if (!wallet || !isOpen) return;
 
       try {
-        // Get recent blockhash - just to see if RPC is working
-        await rpcManager.getRecentBlockhash();
-
-        // Add estimated cost for potentially creating a token account
-        const estimatedBase = LAMPORTS_PER_SIGNATURE * SAFETY_MARGIN;
-        const estimatedTotal = estimatedBase + TOKEN_ACCOUNT_RENT_EXEMPTION;
-
-        setEstimatedFee(estimatedTotal / LAMPORTS_PER_SOL);
+        // Get the rent exemption for token accounts (size is 165 bytes)
+        const tokenAccountSize = 165;
+        const tokenAccountRent = await rpcManager.getMinimumBalanceForRentExemption(tokenAccountSize);
+        setRentExemption(tokenAccountRent);
       } catch (error) {
-        console.error('Failed to estimate fee:', error);
-        // Default: include signature fee + token account rent
-        const estimatedTotal = (LAMPORTS_PER_SIGNATURE * SAFETY_MARGIN) + TOKEN_ACCOUNT_RENT_EXEMPTION;
-        setEstimatedFee(estimatedTotal / LAMPORTS_PER_SOL);
+        console.error('Failed to fetch rent exemption:', error);
+        // Default value for token account rent
+        setRentExemption(2500000);
       }
     };
 
     if (isOpen) {
-      estimateFee();
+      fetchRentExemption();
     }
   }, [wallet, isOpen]);
 
@@ -129,14 +127,139 @@ export default function TokenSendModal({
 
     try {
       // Validate address format
-      new PublicKey(address);
+      const recipientPublicKey = new PublicKey(address);
       setRecipientError(null);
-      setIsAddressValid(true);
-      return true;
+
+      try {
+        // Check if recipient has any SOL balance
+        const recipientBalance = await rpcManager.getBalance(recipientPublicKey.toString());
+        const recipientHasNoSol = recipientBalance === 0;
+        setNeedsWalletFunding(recipientHasNoSol);
+        console.log(`Recipient wallet funding needed: ${recipientHasNoSol}`);
+
+        // Check if the destination address is a token account for this mint
+        const mintPublicKey = new PublicKey(token.mint);
+
+        // Derive the associated token account address
+        const destinationTokenAccount = await getAssociatedTokenAddress(
+          mintPublicKey,
+          recipientPublicKey
+        );
+
+        // Check if this token account exists
+        const accountInfo = await rpcManager.getAccountInfo(destinationTokenAccount.toString());
+
+        // Update state based on whether we need to create an account
+        const accountNeedsCreation = !accountInfo;
+        setNeedsAccountCreation(accountNeedsCreation);
+
+        // Update the fee estimation for all required operations
+        updateFeeEstimation(accountNeedsCreation, recipientHasNoSol);
+
+        setIsAddressValid(true);
+        return true;
+      } catch (error) {
+        console.error('Error checking recipient details:', error);
+        // Even if there's an error, we'll still allow the transaction
+        // The error handling during send will catch any issues
+        setIsAddressValid(true);
+        // Assume we need to create an account to be safe
+        setNeedsAccountCreation(true);
+        setNeedsWalletFunding(true);
+        updateFeeEstimation(true, true);
+        return true;
+      }
     } catch {
       setRecipientError('Invalid Solana address');
       setIsAddressValid(false);
       return false;
+    }
+  };
+
+  // Update the fee estimation method to include wallet funding if needed
+  const updateFeeEstimation = async (
+    needsAccountCreation: boolean,
+    needsWalletFunding: boolean
+  ): Promise<void> => {
+    if (!wallet) return;
+
+    try {
+      // Get recent blockhash
+      const recentBlockhash = await rpcManager.getRecentBlockhash();
+
+      // Create a dummy transaction to estimate fee
+      const dummyTx = new Transaction({ recentBlockhash });
+
+      // Set fee payer
+      dummyTx.feePayer = new PublicKey(wallet.publicKey);
+
+      // Create a dummy recipient for our estimations
+      const dummyRecipient = new PublicKey(wallet.publicKey);
+      const dummyMint = new PublicKey(token.mint);
+      const dummyAssociatedAccount = await getAssociatedTokenAddress(dummyMint, dummyRecipient);
+
+      // If we need to fund the recipient wallet, add that instruction
+      if (needsWalletFunding) {
+        dummyTx.add(
+          SystemProgram.transfer({
+            fromPubkey: new PublicKey(wallet.publicKey),
+            toPubkey: dummyRecipient,
+            lamports: walletFundingAmount
+          })
+        );
+      }
+
+      // If creating an account, add a create instruction
+      if (needsAccountCreation) {
+        dummyTx.add(
+          createAssociatedTokenAccountInstruction(
+            new PublicKey(wallet.publicKey),
+            dummyAssociatedAccount,
+            dummyRecipient,
+            dummyMint
+          )
+        );
+      }
+
+      // Add a transfer instruction
+      if (sourceTokenAccount) {
+        dummyTx.add(
+          createTransferInstruction(
+            new PublicKey(sourceTokenAccount),
+            dummyAssociatedAccount,
+            new PublicKey(wallet.publicKey),
+            1  // Just transfer 1 token unit for estimation
+          )
+        );
+      } else {
+        // Fallback to SOL transfer if we don't have a source token account yet
+        dummyTx.add(
+          SystemProgram.transfer({
+            fromPubkey: new PublicKey(wallet.publicKey),
+            toPubkey: new PublicKey(wallet.publicKey),
+            lamports: 1000,
+          })
+        );
+      }
+
+      // Get fee estimate
+      const fee = await rpcManager.getFeeForMessage(dummyTx.compileMessage());
+
+      // Calculate total with rent exemption and wallet funding if needed
+      const estimatedTotal = (fee * SAFETY_MARGIN) +
+                            (needsAccountCreation ? rentExemption : 0) +
+                            (needsWalletFunding ? walletFundingAmount : 0);
+
+      // Update estimated fee display
+      setEstimatedFee(estimatedTotal / LAMPORTS_PER_SOL);
+    } catch (error) {
+      console.error('Failed to update fee estimation:', error);
+      // Use fallback estimates
+      const defaultFee = 5000 * SAFETY_MARGIN;
+      const estimatedTotal = defaultFee +
+                            (needsAccountCreation ? rentExemption : 0) +
+                            (needsWalletFunding ? walletFundingAmount : 0);
+      setEstimatedFee(estimatedTotal / LAMPORTS_PER_SOL);
     }
   };
 
@@ -198,86 +321,195 @@ export default function TokenSendModal({
       const solBalance = await rpcManager.getBalance(wallet.publicKey);
       const solBalanceInLamports = solBalance * LAMPORTS_PER_SOL;
 
-      if (solBalanceInLamports < TOKEN_ACCOUNT_RENT_EXEMPTION + LAMPORTS_PER_SIGNATURE * SAFETY_MARGIN) {
-        throw new Error("Insufficient SOL balance to pay for account creation");
-      }
-
       // Get recipient public key
       const recipientPublicKey = new PublicKey(address);
 
-      // Get recent blockhash
-      const recentBlockhash = await rpcManager.getRecentBlockhash();
-
       // Create transaction
+      const recentBlockhash = await rpcManager.getRecentBlockhash();
       const transaction = new Transaction({ recentBlockhash });
+
+      // Explicitly set the fee payer for the transaction
+      transaction.feePayer = new PublicKey(wallet.publicKey);
+
+      // Check if the recipient wallet needs funding
+      const recipientBalance = await rpcManager.getBalance(recipientPublicKey.toString());
+      const recipientNeedsFunding = recipientBalance === 0;
+      setNeedsWalletFunding(recipientNeedsFunding);
+
+      // If wallet needs funding, add transfer instruction
+      let walletFundingCost = 0;
+      if (recipientNeedsFunding) {
+        walletFundingCost = walletFundingAmount;
+        transaction.add(
+          SystemProgram.transfer({
+            fromPubkey: new PublicKey(wallet.publicKey),
+            toPubkey: recipientPublicKey,
+            lamports: walletFundingAmount
+          })
+        );
+      }
 
       // Check if the destination already has a token account for this mint
       let destinationTokenAccount: PublicKey;
-      let needsAccountCreation = false;
+      let accountCreationCost = 0;
 
       try {
         // Get the associated token address for the recipient
         const mintPublicKey = new PublicKey(token.mint);
+        console.log(`Using mint address: ${mintPublicKey.toString()}`);
+        console.log(`Using recipient address: ${recipientPublicKey.toString()}`);
+
+        // Use explicit options to ensure proper derivation
         destinationTokenAccount = await getAssociatedTokenAddress(
           mintPublicKey,
-          recipientPublicKey
+          recipientPublicKey,
+          false,           // allowOwnerOffCurve: false is default and safer
+          TOKEN_PROGRAM_ID // Explicitly specify the token program ID
         );
+
+        console.log(`Associated token account address: ${destinationTokenAccount.toString()}`);
 
         // Check if account exists
         const accountInfo = await rpcManager.getAccountInfo(destinationTokenAccount.toString());
+        console.log(`Token account exists: ${!!accountInfo}`);
 
-        // If account doesn't exist, create it
+        // Update state if needed (in case something changed since validation)
         if (!accountInfo) {
           console.log("Creating associated token account for recipient");
-          needsAccountCreation = true;
-          // Add instruction to create associated token account
-          transaction.add(
-            createAssociatedTokenAccountInstruction(
-              new PublicKey(wallet.publicKey), // payer
-              destinationTokenAccount,         // associated token account address
-              recipientPublicKey,              // owner
-              mintPublicKey                    // mint
-            )
-          );
+          setNeedsAccountCreation(true);
+          accountCreationCost = rentExemption;
+
+          try {
+            // Add instruction to create associated token account
+            transaction.add(
+              createAssociatedTokenAccountInstruction(
+                new PublicKey(wallet.publicKey), // payer
+                destinationTokenAccount,         // associated token account address
+                recipientPublicKey,              // owner
+                mintPublicKey,                   // mint
+                TOKEN_PROGRAM_ID                 // explicitly specify token program
+              )
+            );
+            console.log("Added token account creation instruction successfully");
+          } catch (createAccountError: unknown) {
+            console.error("Error creating token account instruction:", createAccountError);
+            throw new Error(`Token account creation instruction failed: ${createAccountError instanceof Error ? createAccountError.message : String(createAccountError)}`);
+          }
+        } else {
+          setNeedsAccountCreation(false);
+          console.log("Found existing token account, no need to create");
+        }
+
+        // Add token transfer instruction
+        try {
+          // Convert amount to the smallest unit based on decimals
+          const adjustedAmount = Math.floor(parseFloat(amount) * Math.pow(10, token.decimals));
+          console.log(`Token transfer: ${adjustedAmount} raw units (${amount} ${token.symbol})`);
+          console.log(`Source token account: ${sourceTokenAccount}`);
+          console.log(`Destination token account: ${destinationTokenAccount.toString()}`);
+          console.log(`Authority (wallet): ${wallet.publicKey}`);
+
+          // Create the transfer instruction with better error handling
+          // First verify the source token account exists and has balance
+          const sourceTokenPubkey = new PublicKey(sourceTokenAccount);
+
+          console.log(`Verifying source token account ${sourceTokenAccount}`);
+          const sourceAccountInfo = await rpcManager.getAccountInfo(sourceTokenAccount);
+          if (!sourceAccountInfo) {
+            throw new Error(`Source token account ${sourceTokenAccount} not found`);
+          }
+          console.log(`Source token account verified, exists on chain`);
+
+          // Create the transfer instruction with proper error handling
+          try {
+            const transferInstruction = createTransferInstruction(
+              sourceTokenPubkey,            // source
+              destinationTokenAccount,      // destination
+              new PublicKey(wallet.publicKey),  // owner/authority
+              adjustedAmount,               // amount (in raw units)
+              [],                           // multiSigners (empty array)
+              TOKEN_PROGRAM_ID              // programId
+            );
+            transaction.add(transferInstruction);
+            console.log("Added token transfer instruction successfully");
+          } catch (err) {
+            console.error("Error in createTransferInstruction:", err);
+            // Try alternative approach without optional parameters
+            const basicTransferInstruction = createTransferInstruction(
+              sourceTokenPubkey,                // source
+              destinationTokenAccount,          // destination
+              new PublicKey(wallet.publicKey),  // owner/authority
+              adjustedAmount                    // amount (in raw units)
+            );
+            transaction.add(basicTransferInstruction);
+            console.log("Added basic token transfer instruction successfully");
+          }
+
+          // Get the transaction cost
+          const message = transaction.compileMessage();
+          const fee = await rpcManager.getFeeForMessage(message);
+
+          // Calculate total cost (fee + rent if creating account + wallet funding)
+          const totalCostInLamports = (fee * SAFETY_MARGIN) + accountCreationCost + walletFundingCost;
+
+          // Log the final transaction details
+          console.log(`Transaction has ${transaction.instructions.length} instructions`);
+          console.log(`Transaction signature count: ${transaction.signatures.length}`);
+          console.log(`Estimated fee: ${fee} lamports (with safety margin: ${fee * SAFETY_MARGIN})`);
+          console.log(`Account creation cost: ${accountCreationCost} lamports`);
+          console.log(`Wallet funding cost: ${walletFundingCost} lamports`);
+          console.log(`Total cost: ${totalCostInLamports} lamports (${totalCostInLamports / LAMPORTS_PER_SOL} SOL)`);
+          console.log(`Wallet SOL balance: ${solBalanceInLamports} lamports (${solBalance} SOL)`);
+
+          // Now check if we have enough SOL balance
+          if (solBalanceInLamports < totalCostInLamports) {
+            throw new Error(`Insufficient SOL balance. Need ${(totalCostInLamports / LAMPORTS_PER_SOL).toFixed(6)} SOL for fees, have ${solBalance.toFixed(6)} SOL`);
+          }
+
+          // Get keypair from private key
+          console.log("Creating signer from private key");
+          const keypair = getKeypairFromPrivateKey(wallet.privateKey);
+
+          // Sign and send transaction
+          console.log("Signing transaction");
+          transaction.sign(keypair);
+
+          console.log("Sending transaction to the network");
+          const signature = await rpcManager.sendTransaction(transaction);
+          console.log(`Transaction sent with signature: ${signature}`);
+
+          // Show success toast
+          let successMessage = 'Token transfer successful';
+          if (needsAccountCreation && needsWalletFunding) {
+            successMessage += '. Created new wallet and token account for recipient.';
+          } else if (needsAccountCreation) {
+            successMessage += '. Created new token account for recipient.';
+          } else if (needsWalletFunding) {
+            successMessage += '. Funded recipient wallet.';
+          }
+
+          toast({
+            title: "Success",
+            description: successMessage,
+          });
+
+          // Open explorer in new tab
+          window.open(`https://solana.fm/tx/${signature}?cluster=mainnet-beta`, '_blank');
+
+          // Close the form and go back
+          onClose();
+
+          // Return early to avoid the outer catch block
+          return;
+        } catch (error: unknown) {
+          console.error('Transaction processing error:', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          throw new Error(`Failed to process token transaction: ${errorMessage}`);
         }
       } catch (error) {
-        console.error('Error with token account:', error);
-        throw new Error("Failed to process token account");
+        console.error('Error with token account or transaction:', error);
+        throw new Error(error instanceof Error ? error.message : "Failed to process token account");
       }
-
-      // Convert amount to the smallest unit based on decimals
-      const adjustedAmount = Math.floor(parseFloat(amount) * Math.pow(10, token.decimals));
-
-      // Add transfer instruction
-      transaction.add(
-        createTransferInstruction(
-          new PublicKey(sourceTokenAccount),  // source
-          destinationTokenAccount,            // destination
-          new PublicKey(wallet.publicKey),    // owner
-          adjustedAmount                      // amount (in raw units)
-        )
-      );
-
-      // Get keypair from private key
-      const keypair = getKeypairFromPrivateKey(wallet.privateKey);
-
-      // Sign and send transaction
-      transaction.sign(keypair);
-      const signature = await rpcManager.sendTransaction(transaction);
-
-      // Show success toast
-      toast({
-        title: "Success",
-        description: needsAccountCreation
-          ? `Token transfer successful. Created new token account for recipient.`
-          : `Token transfer successful.`,
-      });
-
-      // Open explorer in new tab
-      window.open(`https://solana.fm/tx/${signature}?cluster=mainnet-beta`, '_blank');
-
-      // Close the form and go back
-      onClose();
     } catch (error) {
       console.error('Transaction failed:', error);
       toast({
@@ -376,6 +608,18 @@ export default function TokenSendModal({
                   <span className="text-gray-400">Network Fee</span>
                   <span>~{estimatedFee.toFixed(6)} SOL</span>
                 </div>
+                {needsAccountCreation && (
+                  <div className="flex justify-between text-sm mb-4">
+                    <span className="text-gray-400">Account Creation Cost</span>
+                    <span>{(rentExemption / LAMPORTS_PER_SOL).toFixed(6)} SOL</span>
+                  </div>
+                )}
+                {needsWalletFunding && (
+                  <div className="flex justify-between text-sm mb-4">
+                    <span className="text-gray-400">Wallet Funding Cost</span>
+                    <span>{(walletFundingAmount / LAMPORTS_PER_SOL).toFixed(6)} SOL</span>
+                  </div>
+                )}
                 <button
                   type="submit"
                   className="btn-primary w-full"
@@ -400,6 +644,18 @@ export default function TokenSendModal({
                   <p className="text-sm text-gray-500">Network Fee</p>
                   <p className="font-medium">{estimatedFee.toFixed(6)} SOL</p>
                 </div>
+                {needsAccountCreation && (
+                  <div>
+                    <p className="text-sm text-gray-500">Account Creation Cost</p>
+                    <p className="font-medium">{(rentExemption / LAMPORTS_PER_SOL).toFixed(6)} SOL</p>
+                  </div>
+                )}
+                {needsWalletFunding && (
+                  <div>
+                    <p className="text-sm text-gray-500">Wallet Funding Cost</p>
+                    <p className="font-medium">{(walletFundingAmount / LAMPORTS_PER_SOL).toFixed(6)} SOL</p>
+                  </div>
+                )}
               </div>
               <div className="flex space-x-4">
                 <button

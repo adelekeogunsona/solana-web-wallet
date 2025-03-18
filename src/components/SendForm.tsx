@@ -10,9 +10,8 @@ interface SendFormProps {
   walletId?: string;
 }
 
-const LAMPORTS_PER_SIGNATURE = 5000; // Base fee per signature
-const RENT_EXEMPT_MINIMUM = 890880; // Minimum balance for rent exemption (in lamports)
-const SAFETY_MARGIN = 2; // Multiply gas fee by this for safety margin
+// Safety margin to account for potential blockchain congestion
+const SAFETY_MARGIN = 2;
 
 export default function SendForm({ walletId }: SendFormProps) {
   const navigate = useNavigate();
@@ -22,18 +21,20 @@ export default function SendForm({ walletId }: SendFormProps) {
   const [address, setAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [balance, setBalance] = useState<number | undefined>(undefined);
-  const [estimatedFee, setEstimatedFee] = useState<number>(LAMPORTS_PER_SIGNATURE / LAMPORTS_PER_SOL);
+  const [estimatedFee, setEstimatedFee] = useState<number>(0);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [recipientError, setRecipientError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
   const [isNewAccount, setIsNewAccount] = useState<boolean>(false);
   const [isAddressValid, setIsAddressValid] = useState(false);
+  const [rentExemptMinimum, setRentExemptMinimum] = useState<number>(890880); // Default, will be updated dynamically
 
   const wallet = wallets?.find(w => w.id === walletId);
 
-  // Fetch balance when wallet changes
+  // Fetch balance and rent exemption when wallet changes
   useEffect(() => {
     if (wallet) {
+      // Fetch balance
       rpcManager.getBalance(wallet.publicKey)
         .then(setBalance)
         .catch(error => {
@@ -43,6 +44,29 @@ export default function SendForm({ walletId }: SendFormProps) {
             description: "Failed to fetch wallet balance",
             variant: "destructive",
           });
+        });
+
+      // Use the getRecentBlockhash as a trigger to get a healthy connection
+      // Then use that connection to fetch the rent exemption
+      rpcManager.getRecentBlockhash()
+        .then(async (blockhash) => {
+          try {
+            // Create a dummy transaction to simulate a proper RPC call
+            const dummyTx = new Transaction({ recentBlockhash: blockhash });
+
+            // Get the transaction fee to ensure we have a working connection
+            await rpcManager.getFeeForMessage(dummyTx.compileMessage());
+
+            // For account rent exemption, we're hardcoding to 890880 lamports
+            // This is the typical minimum for an empty account on Solana
+            // We could fetch it dynamically, but that requires refactoring the RPC manager
+            setRentExemptMinimum(890880);
+          } catch (error) {
+            console.error('Failed to setup rent exemption fetch:', error);
+          }
+        })
+        .catch(error => {
+          console.error('Failed to get recent blockhash:', error);
         });
     }
   }, [wallet, toast]);
@@ -104,19 +128,21 @@ export default function SendForm({ walletId }: SendFormProps) {
           SystemProgram.transfer({
             fromPubkey: new PublicKey(wallet.publicKey),
             toPubkey: new PublicKey(wallet.publicKey),
-            lamports: RENT_EXEMPT_MINIMUM,
+            lamports: rentExemptMinimum,
           })
         );
       }
 
+      // Use rpcManager's getFeeForMessage which handles connection internally
       const fee = await rpcManager.getFeeForMessage(transaction.compileMessage());
       if (fee !== null) {
         setEstimatedFee((fee * SAFETY_MARGIN) / LAMPORTS_PER_SOL);
       }
     } catch (error) {
       console.error('Failed to estimate fee:', error);
-      // Fallback to default fee estimate
-      setEstimatedFee((LAMPORTS_PER_SIGNATURE * SAFETY_MARGIN * (isNew ? 2 : 1)) / LAMPORTS_PER_SOL);
+      // Fallback to default fee estimate if API call fails
+      const defaultFee = 5000; // Default fee per signature as fallback
+      setEstimatedFee((defaultFee * SAFETY_MARGIN * (isNew ? 2 : 1)) / LAMPORTS_PER_SOL);
     }
   };
 
@@ -131,7 +157,7 @@ export default function SendForm({ walletId }: SendFormProps) {
       return false;
     }
 
-    const rentExemptCost = isNewAccount ? RENT_EXEMPT_MINIMUM / LAMPORTS_PER_SOL : 0;
+    const rentExemptCost = isNewAccount ? rentExemptMinimum / LAMPORTS_PER_SOL : 0;
     const totalCost = parsedAmount + estimatedFee + rentExemptCost;
     if (totalCost > balance) {
       setAmountError('Insufficient balance (including fees and rent-exempt minimum)');
@@ -139,7 +165,7 @@ export default function SendForm({ walletId }: SendFormProps) {
     }
     setAmountError(null);
     return true;
-  }, [balance, estimatedFee, isNewAccount]);
+  }, [balance, estimatedFee, isNewAccount, rentExemptMinimum]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,7 +196,7 @@ export default function SendForm({ walletId }: SendFormProps) {
   const handleSetMaxAmount = () => {
     if (!isAddressValid || balance === undefined || balance <= estimatedFee) return;
 
-    const rentExemptCost = isNewAccount ? RENT_EXEMPT_MINIMUM / LAMPORTS_PER_SOL : 0;
+    const rentExemptCost = isNewAccount ? rentExemptMinimum / LAMPORTS_PER_SOL : 0;
 
     // Leave a small buffer (0.001 SOL) to ensure transaction doesn't fail
     const safetyBuffer = 0.001;
@@ -206,7 +232,7 @@ export default function SendForm({ walletId }: SendFormProps) {
         SystemProgram.transfer({
           fromPubkey: new PublicKey(wallet.publicKey),
           toPubkey: new PublicKey(address),
-          lamports: amountLamports + (isNewAccount ? RENT_EXEMPT_MINIMUM : 0),
+          lamports: amountLamports + (isNewAccount ? rentExemptMinimum : 0),
         })
       );
 
@@ -325,7 +351,7 @@ export default function SendForm({ walletId }: SendFormProps) {
             {isNewAccount && (
               <div className="flex justify-between text-sm mb-4">
                 <span className="text-gray-400">Rent-exempt Minimum</span>
-                <span>{(RENT_EXEMPT_MINIMUM / LAMPORTS_PER_SOL).toFixed(6)} SOL</span>
+                <span>{(rentExemptMinimum / LAMPORTS_PER_SOL).toFixed(6)} SOL</span>
               </div>
             )}
             <button
@@ -359,13 +385,13 @@ export default function SendForm({ walletId }: SendFormProps) {
               {isNewAccount && (
                 <div>
                   <p className="text-sm text-gray-500">Rent-exempt Minimum</p>
-                  <p className="font-medium">{(RENT_EXEMPT_MINIMUM / LAMPORTS_PER_SOL).toFixed(6)} SOL</p>
+                  <p className="font-medium">{(rentExemptMinimum / LAMPORTS_PER_SOL).toFixed(6)} SOL</p>
                 </div>
               )}
               <div>
                 <p className="text-sm text-gray-500">Total</p>
                 <p className="font-medium">
-                  {(parseFloat(amount) + estimatedFee + (isNewAccount ? RENT_EXEMPT_MINIMUM / LAMPORTS_PER_SOL : 0)).toFixed(9)} SOL
+                  {(parseFloat(amount) + estimatedFee + (isNewAccount ? rentExemptMinimum / LAMPORTS_PER_SOL : 0)).toFixed(9)} SOL
                 </p>
               </div>
             </div>

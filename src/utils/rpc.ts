@@ -535,6 +535,19 @@ class RPCManager {
     return this.enqueueRequest(callback);
   }
 
+  async getMinimumBalanceForRentExemption(size: number): Promise<number> {
+    const callback = async (connection: Connection) => {
+      try {
+        return await connection.getMinimumBalanceForRentExemption(size);
+      } catch (error) {
+        console.error('Error in getMinimumBalanceForRentExemption:', error);
+        throw error;
+      }
+    };
+
+    return this.enqueueRequest(callback);
+  }
+
   destroy() {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
