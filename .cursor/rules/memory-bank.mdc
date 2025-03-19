@@ -1,3 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
 # Memory Bank (VERY IMPORTANT)
 As part of your responsibilities, maintain a comprehensive memory.md file in the project's root folder to make future interactions more efficient.
 
