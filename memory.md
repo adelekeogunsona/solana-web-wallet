@@ -1,14 +1,53 @@
-# Solana Multi-Wallet Web Application Memory
+# Memory Bank (VERY IMPORTANT)
+As part of your responsibilities, maintain a comprehensive memory.md file in the project's root folder to make future interactions more efficient.
 
-This document serves as a reference for the Solana Multi-Wallet Web Application, a client-side only React application for managing Solana wallets. All sensitive data is stored locally with encryption.
+After completing each request, read the memory file, see the structure and then please update the memory.md file with:
+
+1. Any new components, modules, or files added or modified
+2. Technical implementation details of how these components work
+3. Updates to dependencies or architectural changes
+4. Changes to data flows or state management
+
+When creating or updating the memory.md file:
+
+1. Structure it with clear headings (use markdown ##, ###)
+2. Include if not already done:
+   - Project overview (purpose, key features)
+   - Core technologies used
+   - Technical implementation details (for each key file/component)
+   - Project directory structure
+   - Workflow descriptions
+   - Security architecture (if applicable)
+   - Data flow diagrams (in text form)
+
+For technical implementation details, explain:
+- What the component/file does
+- How it accomplishes its functionality
+- Key methods/functions and their purposes
+- Integration with other parts of the system
+- Design patterns used
+- Performance considerations
+
+Keep the file concise yet comprehensive enough that a new AI session can understand the project without extensive explanation.
+
+If this is our first interaction on a project, explore the codebase before creating the initial memory.md file.
+
+The goal is to create a persistent memory that improves with each interaction, making future development more efficient.
+
+---
+
+# Solana Multi-Wallet Web Application Memory
 
 ## Project Overview
 
-A browser-based application that allows users to manage multiple Solana wallets with:
-- No backend server (client-side only)
-- Local encryption for wallet data
+A browser-based application for managing multiple Solana wallets with the following key features:
+- Client-side only (no backend server)
+- Local encryption for sensitive data
 - Direct communication with Solana blockchain
 - PWA capabilities
+- Multiple wallet management
+- Token tracking and transfers
+- Secure authentication system
 
 ## Core Technologies
 
@@ -22,10 +61,52 @@ A browser-based application that allows users to manage multiple Solana wallets 
 - **UI Components**: Radix UI, Headless UI
 - **Build Tools**: Vite
 
+## Architecture
+
+### Security Architecture
+
+1. **Encryption System**
+   - Client-side encryption using Web Crypto API
+   - No server storage of sensitive information
+   - Encrypted storage of seed phrases and private keys
+   - Auto-logout functionality
+   - PIN protection for sensitive operations
+   - Secure memory management
+
+2. **Authentication Flow**
+   ```
+   User → Password Entry → Key Derivation → Decrypt Stored Data → Authentication State
+   ```
+
+### Data Flow Architecture
+
+1. **Wallet Operations**
+   ```
+   User Action → AuthContext Method → Wallet Utility → Solana RPC → UI Update
+   ```
+
+2. **Transaction Flow**
+   ```
+   Form Input → Validation → Transaction Building → Signature → Broadcast → Confirmation → Status Update
+   ```
+
+3. **Token Management Flow**
+   ```
+   Wallet Selection → Token Account Fetch → Metadata Resolution → Balance Display → User Interaction
+   ```
+
+### RPC Architecture
+
+- Multiple endpoint support with health monitoring
+- Automatic endpoint selection based on performance
+- Request batching and rate limiting prevention
+- Intelligent caching system
+- Fault tolerance with request retries
+- Connection pooling for improved performance
+
 ## Project Structure
 
 ### Key Directories
-
 - `/src/components/` - React components
 - `/src/context/` - Context providers and types
 - `/src/hooks/` - Custom React hooks
@@ -35,47 +116,43 @@ A browser-based application that allows users to manage multiple Solana wallets 
 - `/src/components/ui/` - Reusable UI components
 - `/src/lib/` - Common utility libraries
 
-### Important Files
+### Core Files Implementation
 
-#### Core Application Files
-
+#### Application Core
 - `src/main.tsx` - Application entry point
 - `src/App.tsx` - Main application component and routing
 - `src/index.css` - Global CSS with Tailwind imports
 
-#### Context Providers
-
+#### Context System
 - `src/context/AuthContext.tsx` - Authentication and wallet management
-- `src/context/authContextTypes.ts` - Types for authentication context
-- `src/context/SettingsProvider.tsx` - Application settings management
-- `src/context/settingsTypes.ts` - Types for settings context
+- `src/context/authContextTypes.ts` - Authentication types
+- `src/context/SettingsProvider.tsx` - Settings management
+- `src/context/settingsTypes.ts` - Settings types
 - `src/context/settingsContext.ts` - Settings context creation
 
-#### Pages
-
-- `src/pages/Login.tsx` - User authentication
-- `src/pages/Setup.tsx` - Initial application setup
-- `src/pages/Home.tsx` - Main dashboard with wallet overview
+#### Page Components
+- `src/pages/Login.tsx` - Authentication interface
+- `src/pages/Setup.tsx` - Initial setup workflow
+- `src/pages/Home.tsx` - Main dashboard
 - `src/pages/AddWallet.tsx` - New wallet creation
-- `src/pages/AddWalletImport.tsx` - Import workflow entry
-- `src/pages/ImportWallet.tsx` - Import existing wallet
-- `src/pages/WalletSetup.tsx` - Wallet setup workflow
-- `src/pages/Settings.tsx` - Application settings
-- `src/pages/Transfer.tsx` - Token transfer functionality
+- `src/pages/AddWalletImport.tsx` - Import workflow
+- `src/pages/ImportWallet.tsx` - Existing wallet import
+- `src/pages/WalletSetup.tsx` - Wallet configuration
+- `src/pages/Settings.tsx` - App settings
+- `src/pages/Transfer.tsx` - Transfer functionality
 
-#### Components
-
+#### Core Components
 - `src/components/WalletCard.tsx` - Individual wallet display
 - `src/components/WalletGrid.tsx` - Wallet collection display
 - `src/components/TokenList.tsx` - SPL token listing
 - `src/components/TokenCard.tsx` - Individual token display
 - `src/components/TokenSection.tsx` - Token section management
-- `src/components/SendForm.tsx` - Token/SOL sending functionality
-- `src/components/TokenSendModal.tsx` - Modal for token sending
-- `src/components/ReceiveForm.tsx` - Receiving tokens/SOL
+- `src/components/SendForm.tsx` - Transfer functionality
+- `src/components/TokenSendModal.tsx` - Transfer modal
+- `src/components/ReceiveForm.tsx` - Receive functionality
 - `src/components/TransactionList.tsx` - Transaction history
 - `src/components/PinInput.tsx` - Secure PIN entry
-- `src/components/AddWalletButton.tsx` - Button for adding new wallets
+- `src/components/AddWalletButton.tsx` - Wallet addition
 
 #### Utils & Hooks
 

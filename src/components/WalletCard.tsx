@@ -1,15 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/useToast"
 import { useSolPrice } from "@/hooks/useSolPrice"
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { rpcManager } from '@/utils/rpc';
 
 interface WalletCardProps {
   id: string;
   name: string;
   address: string;
-  balance?: number;
   isActive?: boolean;
   isCompact?: boolean;
   isFavorite?: boolean;
@@ -23,7 +23,6 @@ export default function WalletCard({
   id,
   name,
   address,
-  balance,
   isActive,
   isCompact,
   isFavorite,
@@ -38,6 +37,31 @@ export default function WalletCard({
   const shortAddress = `${address.slice(0, 4)}...${address.slice(-4)}`;
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState(name);
+  const [balance, setBalance] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchBalance = async () => {
+      try {
+        const balance = await rpcManager.getBalance(address);
+        if (isMounted) {
+          setBalance(balance);
+        }
+      } catch (error) {
+        console.error('Error fetching balance:', error);
+        if (isMounted) {
+          setBalance(undefined);
+        }
+      }
+    };
+
+    fetchBalance();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [address]);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();

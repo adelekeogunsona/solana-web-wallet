@@ -8,7 +8,6 @@ interface Wallet {
   id: string;
   name: string;
   address: string;
-  balance?: number;
   isFavorite?: boolean;
   lastUsed?: Date;
 }
@@ -73,7 +72,6 @@ export default function WalletGrid({
             id={wallet.id}
             name={wallet.name}
             address={wallet.address}
-            balance={wallet.balance}
             isActive={activeWalletId === wallet.id}
             isCompact={isCompactView}
             isFavorite={wallet.isFavorite}
