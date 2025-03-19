@@ -32,14 +32,14 @@ interface RPCConfig {
 }
 
 const DEFAULT_CONFIG: RPCConfig = {
-  requestsPerBatch: 15,
-  delayBetweenBatches: 1000,
-  healthCheckInterval: 30000,
-  maxQueueSize: 100,
-  maxRetries: 3,
-  retryDelay: 1000,
-  balanceCacheDuration: 5000,
-  slotRefreshInterval: 60000,
+  requestsPerBatch: 15, // 15 requests per batch
+  delayBetweenBatches: 500, // 500ms
+  healthCheckInterval: 30000, // 30 seconds
+  maxQueueSize: 100, // 100 requests in queue
+  maxRetries: 3, // 3 retries
+  retryDelay: 500, // 500ms
+  balanceCacheDuration: 5000, // this is the time it takes for the balance to be updated in the cache
+  slotRefreshInterval: 60000, // 1 minute
 };
 
 interface QueuedRequest<T> {
