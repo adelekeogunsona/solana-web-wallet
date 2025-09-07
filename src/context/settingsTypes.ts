@@ -17,7 +17,7 @@ export interface SettingsContextType {
 }
 
 export const defaultSettings: Settings = {
-  rpcEndpoints: [],
+  rpcEndpoints: ['https://solana-rpc.publicnode.com'],
   balanceReloadInterval: 10000, // 10 seconds by default
   autoLogoutDuration: 900000, // 15 minutes by default
   theme: 'system',
